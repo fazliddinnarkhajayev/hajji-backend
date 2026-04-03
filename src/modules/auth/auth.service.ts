@@ -52,7 +52,7 @@ export class AuthService {
   ) {}
 
   private normalizePhone(phone: string): string {
-    return phone.replace(/\D/g, "").slice(-10);
+    return phone.replace(/\D/g, "");
   }
 
   // ===================== Admin Login =====================
@@ -145,7 +145,6 @@ export class AuthService {
     access_token: string;
     refresh_token: string;
     is_new_user: boolean;
-    user: any;
   }> {
     const phone = this.normalizePhone(dto.phone);
 
@@ -179,7 +178,7 @@ export class AuthService {
       await this.otpSessionsDao.verifyOtpSession(otpSession.id, trx);
 
       // Find or create user (PILGRIM)
-      let user = await this.usersAuthDao.findUserByPhone(phone, trx);
+      let user = await this.usersAuthDao.findUserBy({ username: phone }, trx);
       let isNewUser = false;
 
       if (!user) {
@@ -229,8 +228,7 @@ export class AuthService {
 
       return {
         ...tokens,
-        is_new_user: isNewUser,
-        user: null,
+        is_new_user: isNewUser
       };
     });
   }
@@ -262,7 +260,7 @@ export class AuthService {
 
     return this.db.transaction(async (trx) => {
       // Check if phone already exists
-      const existingUser = await this.usersAuthDao.findUserByPhone(phone, trx);
+      const existingUser = await this.usersAuthDao.findUserBy({ phone }, trx);
       if (existingUser) {
         throw new ConflictException("Phone number is already registered");
       }

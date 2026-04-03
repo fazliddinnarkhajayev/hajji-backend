@@ -9,6 +9,7 @@ export interface UserRecord {
   phone: string | null;
   email: string | null;
   password_hash: string | null;
+  username: string | null;
   type: 'ADMIN' | 'PILGRIM';
   status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'DELETED';
   is_deleted: boolean;
@@ -39,9 +40,9 @@ export class UsersAuthDao {
       .first();
   }
 
-  async findUserByPhone(phone: string, trx?: Knex.Transaction): Promise<UserRecord | undefined> {
+  async findUserBy(query: Partial<UserRecord>, trx?: Knex.Transaction): Promise<UserRecord | undefined> {
     return this.qb(trx)
-      .where({ phone })
+      .where(query)
       .first();
   }
 

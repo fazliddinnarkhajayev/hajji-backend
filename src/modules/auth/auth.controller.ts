@@ -27,7 +27,8 @@ export class AuthController {
 
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto);
+    const data = await this.authService.verifyOtp(dto);
+    return data;
   }
 
   // ===================== Pilgrim Registration =====================
