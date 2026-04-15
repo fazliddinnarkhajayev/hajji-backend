@@ -10,4 +10,5 @@ export const TABLE_NAMES = {
   REFRESH_TOKENS: 'refresh_tokens',
   AGENCIES: 'agencies',
   AGENCY_USERS: 'agency_users',
+  LOCATIONS: 'locations',
 } as const;
