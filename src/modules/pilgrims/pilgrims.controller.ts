@@ -9,7 +9,7 @@ export class PilgrimsController {
   constructor(private readonly pilgrimsService: PilgrimsService) {}
 
   @Get('profile')
-  async getProfile(@Req() req: Request & { user: JwtPayload }) {
-    return this.pilgrimsService.getProfile(req.user.user_id);
+  async getProfile(@Req() req: Request & { user: any }) {
+    return this.pilgrimsService.getProfile(req.user.id);
   }
 }

@@ -22,13 +22,14 @@ import { AdminsDao } from "../../shared/dao/admins.dao";
 import { OtpSessionsDao } from "../../shared/dao/otp-sessions.dao";
 import { RefreshTokensDao } from "../../shared/dao/refresh-tokens.dao";
 import { PilgrimsDao } from "src/shared/dao/piligrims.dao";
+import { AgencyUsersDao } from "../../modules/admins/modules/agencies/modules/agency-users/agency-users.dao";
 import { KNEX_CONNECTION } from "src/core/database/database.constants";
 import { UsersService } from "../users/users.service";
 import { UserTypesEnum } from "src/shared/enums/user-types.enum";
 
 export interface JwtPayload {
   user_id: string;
-  type: "ADMIN" | "PILGRIM";
+  type: "ADMIN" | "PILGRIM" | "AGENCY_USER";
   role?: "STAFF" | "SUPER_ADMIN";
 }
 
@@ -43,6 +44,7 @@ export class AuthService {
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
     private readonly usersAuthDao: UsersAuthDao,
     private readonly adminsDao: AdminsDao,
+    private readonly agencyUsersDao: AgencyUsersDao,
     private readonly usersService: UsersService,
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly otpSessionsDao: OtpSessionsDao,
@@ -105,6 +107,60 @@ export class AuthService {
       return {
         ...tokens,
         user: admin,
+      };
+    });
+  }
+
+  // ===================== Agency User Login =====================
+
+  async agencyLogin(
+    dto: LoginDto,
+  ): Promise<{ access_token: string; refresh_token: string; user: any }> {
+    return this.db.transaction(async (trx) => {
+      const user = await this.usersService.findOneBy(
+        { username: dto.username, type: UserTypesEnum.AGENCY_USER },
+        trx,
+      );
+      if (!user) {
+        throw new UnauthorizedException("Invalid credentials");
+      }
+
+      // Find agency user by user_id
+      const agencyUser: any = await this.agencyUsersDao.findOne(
+        { user_id: user.id, is_deleted: false },
+        trx,
+      );
+      if (!agencyUser) {
+        throw new UnauthorizedException("Invalid credentials");
+      }
+
+      // Check if user is blocked
+      if (agencyUser.status === 'BLOCKED') {
+        throw new ForbiddenException("User account is blocked");
+      }
+
+      // Verify password
+      if (
+        !user.password_hash ||
+        !(await bcrypt.compare(dto.password, user.password_hash))
+      ) {
+        throw new UnauthorizedException("Invalid credentials");
+      }
+
+      // Update last login
+      await this.usersAuthDao.updateLoginAt(user.id, trx);
+
+      // Generate tokens
+      const tokens = await this.generateTokens(
+        user.id,
+        UserTypesEnum.AGENCY_USER,
+        agencyUser.role,
+        trx,
+      );
+
+      return {
+        ...tokens,
+        user: agencyUser,
       };
     });
   }
@@ -458,7 +514,7 @@ export class AuthService {
 
   private async generateTokens(
     userId: string,
-    userType: "ADMIN" | "PILGRIM",
+    userType: "ADMIN" | "PILGRIM" | "AGENCY_USER",
     role?: "STAFF" | "SUPER_ADMIN",
     trx?: Knex.Transaction,
   ): Promise<{ access_token: string; refresh_token: string }> {

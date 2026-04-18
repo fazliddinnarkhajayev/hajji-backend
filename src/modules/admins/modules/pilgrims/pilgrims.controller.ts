@@ -44,4 +44,14 @@ export class PilgrimsController {
   async unblock(@Param('id') id: string) {
     return this.pilgrimsService.unblock(id);
   }
+
+  @Post(':id/set-agency')
+  async setAgency(@Param('id') id: string, @Body() body: { agency_id: string }) {
+    return this.pilgrimsService.setAgency(id, body.agency_id);
+  }
+
+  @Post(':id/remove-agency')
+  async removeAgency(@Param('id') id: string) {
+    return this.pilgrimsService.removeAgency(id);
+  }
 }

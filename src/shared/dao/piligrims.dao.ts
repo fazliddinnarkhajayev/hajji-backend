@@ -16,6 +16,7 @@ export interface Pilgrim {
   country_id?: string | null;
   region_id?: string | null;
   district_id?: string | null;
+  agency_id?: string | null;
   language?: string;
   user_id: string;
   status: 'ACTIVE' | 'BLOCKED';
@@ -45,6 +46,10 @@ export interface Pilgrim {
     name?: string;
     soato?: string;
   };
+  agency?: {
+    id?: string;
+    name?: string;
+  } | null;
 }
 
 @Injectable()
@@ -105,11 +110,13 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.COUNTRIES, `${TABLE_NAMES.PILGRIMS}.country_id`, `${TABLE_NAMES.COUNTRIES}.id`)
       .leftJoin(TABLE_NAMES.REGIONS, `${TABLE_NAMES.PILGRIMS}.region_id`, `${TABLE_NAMES.REGIONS}.id`)
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.COUNTRIES}.id, 'name', ${TABLE_NAMES.COUNTRIES}.name, 'soato', ${TABLE_NAMES.COUNTRIES}.soato) as country`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.REGIONS}.id, 'name', ${TABLE_NAMES.REGIONS}.name, 'soato', ${TABLE_NAMES.REGIONS}.soato) as region`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.user_id`]: userId, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })
       .first();
@@ -122,15 +129,81 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.COUNTRIES, `${TABLE_NAMES.PILGRIMS}.country_id`, `${TABLE_NAMES.COUNTRIES}.id`)
       .leftJoin(TABLE_NAMES.REGIONS, `${TABLE_NAMES.PILGRIMS}.region_id`, `${TABLE_NAMES.REGIONS}.id`)
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.COUNTRIES}.id, 'name', ${TABLE_NAMES.COUNTRIES}.name, 'soato', ${TABLE_NAMES.COUNTRIES}.soato) as country`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.REGIONS}.id, 'name', ${TABLE_NAMES.REGIONS}.name, 'soato', ${TABLE_NAMES.REGIONS}.soato) as region`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.id`]: id, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })
       .first();
 
     return record as Pilgrim | undefined;
+  }
+
+  async findAllWithJoins(trx?: Knex.Transaction): Promise<Pilgrim[]> {
+    const records = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .select(
+        `${TABLE_NAMES.PILGRIMS}.*`,
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+      )
+      .where({ [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false });
+
+    return records as Pilgrim[];
+  }
+
+  async findManyPaginated(
+    where: Partial<Pilgrim> = {},
+    pageIndex: number = 1,
+    pageSize: number = 10,
+    trx?: Knex.Transaction,
+  ) {
+    const { PaginatedResult } = await import('../interfaces/pagination.interface');
+    
+    const offset = (pageIndex - 1) * pageSize;
+
+    const [{ count }] = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .where((builder) => {
+        Object.entries(where).forEach(([key, value]) => {
+          if (key !== 'is_deleted') {
+            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
+          }
+        });
+        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
+      })
+      .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .count('* as count');
+
+    const totalItemsCount = Number(count);
+    const totalPagesCount = Math.ceil(totalItemsCount / pageSize);
+
+    const records = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .select(
+        `${TABLE_NAMES.PILGRIMS}.*`,
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+      )
+      .where((builder) => {
+        Object.entries(where).forEach(([key, value]) => {
+          if (key !== 'is_deleted') {
+            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
+          }
+        });
+        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
+      })
+      .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .limit(pageSize)
+      .offset(offset);
+
+    return new PaginatedResult(records as Pilgrim[], {
+      total_items_count: totalItemsCount,
+      total_pages_count: totalPagesCount,
+      page_size: pageSize,
+      page_index: pageIndex,
+    });
   }
 }

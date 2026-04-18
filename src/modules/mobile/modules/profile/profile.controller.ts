@@ -19,12 +19,12 @@ export class ProfileController {
 
   @Get()
   async getProfile(@CurrentUser() user: any): Promise<UserProfile> {
-    return this.profileService.getUserProfile(user.user_id || user.id || user.sub);
+    return this.profileService.getUserProfile(user.id || user.id || user.sub);
   }
 
   @Get('settings')
   async getSettings(@CurrentUser() user: any): Promise<UserProfileSettings> {
-    const profile = await this.profileService.getUserProfile(user.user_id || user.id || user.sub);
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
     return this.profileService.getProfileSettings(profile.id);
   }
 
@@ -34,7 +34,7 @@ export class ProfileController {
     @CurrentUser() user: any,
     @Body() body: { language: 'uz' | 'ru' | 'en' },
   ): Promise<UserProfile> {
-    const profile = await this.profileService.getUserProfile(user.user_id || user.id || user.sub);
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
     return this.profileService.updateLanguage(profile.id, body.language);
   }
 
@@ -44,7 +44,7 @@ export class ProfileController {
     @CurrentUser() user: any,
     @Body() body: { notifications_enabled: boolean },
   ): Promise<UserProfile> {
-    const profile = await this.profileService.getUserProfile(user.user_id || user.id || user.sub);
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
     return this.profileService.updateNotifications(profile.id, body.notifications_enabled);
   }
 
@@ -54,7 +54,7 @@ export class ProfileController {
     @CurrentUser() user: any,
     @Body() data: Partial<UserProfile>,
   ): Promise<UserProfile> {
-    const profile = await this.profileService.getUserProfile(user.user_id || user.id || user.sub);
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
     return this.profileService.updateProfile(profile.id, data);
   }
 
@@ -64,7 +64,7 @@ export class ProfileController {
     @CurrentUser() user: any,
     @Body() body: { avatar_url: string },
   ): Promise<{ avatar_url: string }> {
-    const profile = await this.profileService.getUserProfile(user.user_id || user.id || user.sub);
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
     const updated = await this.profileService.updateAvatar(profile.id, body.avatar_url);
     return { avatar_url: updated.avatar_url || '' };
   }

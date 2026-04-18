@@ -5,6 +5,7 @@ import { UserTypesEnum } from "src/shared/enums/user-types.enum";
 import { UsersService } from "src/modules/users/users.service";
 import { Pilgrim, PilgrimsDao } from "src/shared/dao/piligrims.dao";
 import { CreatePilgrimDto } from "./dto/create-pilgrim.dto";
+import { PaginatedResult } from "src/shared/interfaces/pagination.interface";
 
 @Injectable()
 export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
@@ -45,6 +46,14 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     return this.transaction(run);
   }
 
+  async findAllPaginated(
+    where: Partial<Pilgrim> = {},
+    pageIndex: number = 1,
+    pageSize: number = 10,
+  ): Promise<PaginatedResult<Pilgrim>> {
+    return this.pilgrimsDao.findManyPaginated(where, pageIndex, pageSize);
+  }
+
   async block(id: string) {
     return this.pilgrimsDao.updateById(id, {
       is_blocked: true,
@@ -58,6 +67,20 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
       is_blocked: false,
       status: "ACTIVE",
       blocked_at: undefined,
+    } as Partial<Pilgrim>);
+  }
+
+  async setAgency(id: string, agencyId: string): Promise<Pilgrim | undefined> {
+    return this.pilgrimsDao.updateById(id, {
+      agency_id: agencyId,
+      updated_at: new Date(),
+    } as Partial<Pilgrim>);
+  }
+
+  async removeAgency(id: string): Promise<Pilgrim | undefined> {
+    return this.pilgrimsDao.updateById(id, {
+      agency_id: null,
+      updated_at: new Date(),
     } as Partial<Pilgrim>);
   }
 }

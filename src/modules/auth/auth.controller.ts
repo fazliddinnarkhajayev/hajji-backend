@@ -18,6 +18,13 @@ export class AuthController {
     return this.authService.adminLogin(dto);
   }
 
+  // ===================== Agency User Login =====================
+
+  @Post('agency-login')
+  async agencyLogin(@Body() dto: LoginDto) {
+    return this.authService.agencyLogin(dto);
+  }
+
   // ===================== Pilgrim OTP Flow =====================
 
   @Post('send-otp')
