@@ -1,5 +1,5 @@
 {
-  "name": "umrah-buddy-backend",
+  "name": "hajji-backend",
   "version": "1.0.0",
   "description": "Umrah Buddy backend (NestJS + Knex + Postgres)",
   "private": true,

@@ -5,5 +5,6 @@ export interface Users {
   username: string;
   password_hash: string | null;
   type: UserTypesEnum;
+  created_by_id: string | null;
   created_at: Date;
 }

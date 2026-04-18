@@ -3,14 +3,15 @@ import { PilgrimsService } from './pilgrims.service';
 import { CreatePilgrimDto } from './dto/create-pilgrim.dto';
 import { UpdatePilgrimDto } from './dto/update-pilgrim.dto';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
+import { CurrentUser } from 'src/shared/decorators';
 
 @Controller('admins/pilgrims')
 export class PilgrimsController {
   constructor(private readonly pilgrimsService: PilgrimsService) {}
 
   @Post()
-  async create(@Body() dto: CreatePilgrimDto) {
-    return this.pilgrimsService.create(dto);
+  async create(@Body() dto: CreatePilgrimDto, @CurrentUser() user: any) {
+    return this.pilgrimsService.create(dto, user);
   }
 
   @Get()

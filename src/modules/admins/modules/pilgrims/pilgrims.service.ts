@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { Knex } from 'knex';
-import { BaseService } from 'src/shared/services/base.service';
-import { UserTypesEnum } from 'src/shared/enums/user-types.enum';
-import { UsersService } from 'src/modules/users/users.service';
-import { Pilgrim, PilgrimsDao } from 'src/shared/dao/piligrims.dao';
-import { CreatePilgrimDto } from './dto/create-pilgrim.dto';
+import { Injectable } from "@nestjs/common";
+import { Knex } from "knex";
+import { BaseService } from "src/shared/services/base.service";
+import { UserTypesEnum } from "src/shared/enums/user-types.enum";
+import { UsersService } from "src/modules/users/users.service";
+import { Pilgrim, PilgrimsDao } from "src/shared/dao/piligrims.dao";
+import { CreatePilgrimDto } from "./dto/create-pilgrim.dto";
 
 @Injectable()
 export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
@@ -15,10 +15,14 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     super(pilgrimsDao);
   }
 
-  async create(dto: CreatePilgrimDto, trx?: Knex.Transaction): Promise<Pilgrim> {
+  async create(dto: CreatePilgrimDto, user: any): Promise<Pilgrim> {
     const run = async (t: Knex.Transaction) => {
-      const user = await this.usersService.create(
-        { username: dto.phone, type: UserTypesEnum.PILGRIM } as any,
+      const new_user = await this.usersService.create(
+        {
+          username: dto.phone,
+          type: UserTypesEnum.PILGRIM,
+          created_by_id: user.created_by_id,
+        } as any,
         t,
       );
 
@@ -32,19 +36,19 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
           country_id: dto.country_id,
           region_id: dto.region_id,
           district_id: dto.district_id,
-          user_id: user.id,
+          user_id: new_user.id,
         } as Partial<Pilgrim>,
         t,
       );
     };
 
-    return trx ? run(trx) : this.transaction(run);
+    return this.transaction(run);
   }
 
   async block(id: string) {
     return this.pilgrimsDao.updateById(id, {
       is_blocked: true,
-      status: 'BLOCKED',
+      status: "BLOCKED",
       blocked_at: new Date(),
     } as Partial<Pilgrim>);
   }
@@ -52,7 +56,7 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   async unblock(id: string) {
     return this.pilgrimsDao.updateById(id, {
       is_blocked: false,
-      status: 'ACTIVE',
+      status: "ACTIVE",
       blocked_at: undefined,
     } as Partial<Pilgrim>);
   }
