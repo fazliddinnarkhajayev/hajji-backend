@@ -6,6 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { IsPublic } from 'src/shared/decorators';
 
 @Controller('auth')
 export class AuthController {
@@ -13,6 +14,7 @@ export class AuthController {
 
   // ===================== Admin Login =====================
 
+  @IsPublic()
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.adminLogin(dto);
@@ -20,6 +22,7 @@ export class AuthController {
 
   // ===================== Agency User Login =====================
 
+  @IsPublic()
   @Post('agency-login')
   async agencyLogin(@Body() dto: LoginDto) {
     return this.authService.agencyLogin(dto);
@@ -27,11 +30,13 @@ export class AuthController {
 
   // ===================== Pilgrim OTP Flow =====================
 
+  @IsPublic()
   @Post('send-otp')
   async sendOtp(@Body() dto: SendOtpDto) {
     return this.authService.sendOtp(dto);
   }
 
+  @IsPublic()
   @Post('verify-otp')
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     const data = await this.authService.verifyOtp(dto);
@@ -40,6 +45,7 @@ export class AuthController {
 
   // ===================== Pilgrim Registration =====================
 
+  @IsPublic()
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.registerPilgrim(dto);

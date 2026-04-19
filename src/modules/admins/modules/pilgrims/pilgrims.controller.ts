@@ -46,12 +46,29 @@ export class PilgrimsController {
   }
 
   @Post(':id/set-agency')
-  async setAgency(@Param('id') id: string, @Body() body: { agency_id: string }) {
-    return this.pilgrimsService.setAgency(id, body.agency_id);
+  async setAgency(
+    @Param('id') id: string,
+    @Body() body: { agency_id: string; notes?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.pilgrimsService.setAgency(id, body, user);
   }
 
   @Post(':id/remove-agency')
-  async removeAgency(@Param('id') id: string) {
-    return this.pilgrimsService.removeAgency(id);
+  async removeAgency(
+    @Param('id') id: string,
+    @Body() body: { notes?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.pilgrimsService.removeAgency(id, body, user);
+  }
+
+  @Get(':id/agency-history')
+  async getAgencyHistory(
+    @Param('id') id: string,
+    @Query('limit') limit: number = 50,
+    @Query('offset') offset: number = 0,
+  ) {
+    return this.pilgrimsService.getAgencyHistory(id, limit, offset);
   }
 }

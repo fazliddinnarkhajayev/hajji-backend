@@ -1,9 +1,8 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Body } from '@nestjs/common';
 import { AgencyProfileService } from './profile.service';
 import { JwtAuthGuard, JwtPayload } from 'src/shared/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/shared/decorators/current-user.decorator';
 
-@UseGuards(JwtAuthGuard)
 @Controller('agencies/profile')
 export class AgencyProfileController {
   constructor(private readonly profileService: AgencyProfileService) {}

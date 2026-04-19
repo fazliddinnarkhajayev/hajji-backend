@@ -135,7 +135,7 @@ export class AuthService {
       }
 
       // Check if user is blocked
-      if (agencyUser.status === 'BLOCKED') {
+      if (agencyUser.status === "BLOCKED") {
         throw new ForbiddenException("User account is blocked");
       }
 
@@ -284,7 +284,7 @@ export class AuthService {
 
       return {
         ...tokens,
-        is_new_user: isNewUser
+        is_new_user: isNewUser,
       };
     });
   }
@@ -439,7 +439,7 @@ export class AuthService {
         dto.refresh_token,
         trx,
       );
-      console.log('refreshTokenRecord', refreshTokenRecord)
+      console.log("refreshTokenRecord", refreshTokenRecord);
       if (!refreshTokenRecord) {
         throw new UnauthorizedException("Invalid or expired refresh token");
       }
@@ -481,7 +481,7 @@ export class AuthService {
 
         return { access_token: accessToken };
       } catch (error) {
-        console.log('Error', error)
+        console.log("Error", error);
         throw new UnauthorizedException("Invalid refresh token");
       }
     });

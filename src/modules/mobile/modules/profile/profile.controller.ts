@@ -4,15 +4,12 @@ import {
   Put,
   Post,
   Body,
-  UseGuards,
   HttpCode,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/shared/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/shared/decorators';
 import { ProfileService } from './profile.service';
 import { UserProfile, UserProfileSettings } from './profile.interface';
 
-@UseGuards(JwtAuthGuard)
 @Controller('mobile/profile')
 export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}

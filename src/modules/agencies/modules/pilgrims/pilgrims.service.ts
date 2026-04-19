@@ -13,17 +13,21 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     super(pilgrimsDao);
   }
 
-  async getAgencyPilgrims(user: any, pageIndex: number = 1, pageSize: number = 10) {
+  async getAgencyPilgrims(user: any, query: any) {
+    const { page = '1', limit = '10', phone } = query;
+    const pageIndex = parseInt(page, 10);
+    const pageSize = parseInt(limit, 10);
 
-    // Fetch all pilgrims with pagination
-    // Note: Currently there's no direct agency_id in pilgrims table
-    // This can be extended to filter by agency_id once the relationship is properly set up
-    const pilgrims = await this.pilgrimsDao.findManyPaginated(
-      { is_deleted: false, agency_id: user.agency_id } as any,
-      pageIndex,
-      pageSize,
-    );
-    return pilgrims;
+    // Build filter criteria
+    const where: any = { is_deleted: false, agency_id: user.agency_id };
+
+    // Apply phone filter if provided (using ILIKE for case-insensitive partial matching)
+    if (phone) {
+      return await this.pilgrimsDao.findManyPaginatedWithPhone(where, phone, pageIndex, pageSize);
+    }
+
+    // Fetch all pilgrims without phone filter
+    return await this.pilgrimsDao.findManyPaginated(where, pageIndex, pageSize);
   }
 
   async getPilgrimDetails(userId: string) {

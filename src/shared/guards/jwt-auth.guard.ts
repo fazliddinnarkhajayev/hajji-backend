@@ -58,8 +58,6 @@ export class JwtAuthGuard implements CanActivate {
     try {
       const secret = this.configService.get<string>('ACCESS_TOKEN_SECRET') ?? 'change_me_access';
       const payload = this.jwtService.verify<JwtPayload>(token, { secret });
-      console.log('Decoded JWT payload:', payload);
-      
       // Try to fetch full user data with related information
       try {
         if (this.usersService && typeof this.usersService.getCurrentUser === 'function') {

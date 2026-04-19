@@ -1,9 +1,8 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
 import { JwtAuthGuard, JwtPayload } from 'src/shared/guards/jwt-auth.guard';
 import { PilgrimsService } from './pilgrims.service';
 import { Request } from 'express';
 
-@UseGuards(JwtAuthGuard)
 @Controller('pilgrims')
 export class PilgrimsController {
   constructor(private readonly pilgrimsService: PilgrimsService) {}

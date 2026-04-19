@@ -206,4 +206,59 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       page_index: pageIndex,
     });
   }
+
+  async findManyPaginatedWithPhone(
+    where: Partial<Pilgrim> = {},
+    phone: string,
+    pageIndex: number = 1,
+    pageSize: number = 10,
+    trx?: Knex.Transaction,
+  ) {
+    const { PaginatedResult } = await import('../interfaces/pagination.interface');
+    
+    const offset = (pageIndex - 1) * pageSize;
+
+    const [{ count }] = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .where((builder) => {
+        Object.entries(where).forEach(([key, value]) => {
+          if (key !== 'is_deleted') {
+            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
+          }
+        });
+        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
+      })
+      .where(`${TABLE_NAMES.PILGRIMS}.phone`, 'ILIKE', `%${phone}%`)
+      .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .count('* as count');
+
+    const totalItemsCount = Number(count);
+    const totalPagesCount = Math.ceil(totalItemsCount / pageSize);
+
+    const records = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .select(
+        `${TABLE_NAMES.PILGRIMS}.*`,
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+      )
+      .where((builder) => {
+        Object.entries(where).forEach(([key, value]) => {
+          if (key !== 'is_deleted') {
+            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
+          }
+        });
+        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
+      })
+      .where(`${TABLE_NAMES.PILGRIMS}.phone`, 'ILIKE', `%${phone}%`)
+      .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .limit(pageSize)
+      .offset(offset);
+
+    return new PaginatedResult(records as Pilgrim[], {
+      total_items_count: totalItemsCount,
+      total_pages_count: totalPagesCount,
+      page_size: pageSize,
+      page_index: pageIndex,
+    });
+  }
 }

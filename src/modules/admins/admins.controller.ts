@@ -7,9 +7,7 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from "@nestjs/common";
-import { JwtAuthGuard } from "../../shared/guards/jwt-auth.guard";
 import { AdminsService } from "./admins.service";
 import { BlockUnblockDto } from "./dto/block-unblock.dto";
 import { CreateAdminDto } from "./dto/create-admin.dto";
@@ -17,7 +15,6 @@ import { UpdateAdminDto } from "./dto/update-admin.dto";
 import { PaginationDto } from "src/shared/dto/pagination.dto";
 import { IsPublic } from "src/shared/decorators";
 
-@UseGuards(JwtAuthGuard)
 @Controller("admins/users")
 export class AdminsController {
   constructor(private readonly adminsService: AdminsService) {}
