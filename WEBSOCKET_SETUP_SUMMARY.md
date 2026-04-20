@@ -118,7 +118,7 @@ export class BookingsService {
 ```javascript
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:4000', {
+const socket = io('http://localhost:3000', {
   query: { userId: 'user123' }
 });
 
@@ -169,7 +169,7 @@ socket.on('message', (data) => {
 
 ## Configuration
 
-- **Port**: Runs on same port as HTTP server (default: 4000)
+- **Port**: Runs on same port as HTTP server (default: 3000)
 - **CORS**: Enabled for all origins (modify in `websocket.gateway.ts` if needed)
 - **Path**: Default Socket.IO path `/socket.io`
 

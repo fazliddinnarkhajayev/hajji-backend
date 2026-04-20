@@ -8,7 +8,7 @@ import { ResponseInterceptor } from './shared/interceptors/response.interceptor'
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const apiPrefix = process.env.API_PREFIX ?? 'api';
-  const port = Number(process.env.PORT ?? 4000);
+  const port = Number(process.env.PORT ?? 3000);
 
   app.enableCors('*')
 

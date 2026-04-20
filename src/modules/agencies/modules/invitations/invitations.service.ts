@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { InvitationsDao, Invitation } from "src/shared/dao/invitations.dao";
 import { PilgrimsDao } from "src/shared/dao/piligrims.dao";
+import { WebSocketService } from "src/modules/websocket/websocket.service";
 import { CreateInvitationDto } from "./invitations.dto";
 import { InvitationStatus } from "./enums/invitation-status.enum";
 import { PaginatedResult } from "src/shared/interfaces/pagination.interface";
@@ -14,6 +15,7 @@ export class InvitationsService {
   constructor(
     private readonly invitationsDao: InvitationsDao,
     private readonly pilgrimsDao: PilgrimsDao,
+    private readonly webSocketService: WebSocketService,
   ) {}
 
   async create(
@@ -56,6 +58,19 @@ export class InvitationsService {
       status: InvitationStatus.PENDING,
       message: message || null,
     } as any);
+
+    // Send notification to pilgrim about the new invitation
+    if (pilgrim.user_id) {
+      this.webSocketService.broadcastToUser(
+        pilgrim.user_id,
+        'new_invitation',
+        {
+          type: 'NEW_INVITATION',
+          invitation,
+          message: `You have received a new invitation from ${invitation.agency?.name || 'an agency'}`,
+        },
+      );
+    }
 
     return invitation;
   }

@@ -59,7 +59,7 @@ Authorization: Bearer {accessToken}
 {
   "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "550e8400-e29b-41d4-a716-446655430000",
     "first_name": "Ahmed",
     "last_name": "Hassan",
     "middle_name": null,
@@ -97,7 +97,7 @@ Content-Type: application/json
 {
   "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "550e8400-e29b-41d4-a716-446655430000",
     "first_name": "Ahmed",
     "last_name": "Hassan",
     "language": "ru",
@@ -137,7 +137,7 @@ Content-Type: application/json
   "success": true,
   "data": {
     "id": "settings-uuid",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "user_id": "550e8400-e29b-41d4-a716-446655430000",
     "notifications_enabled": true,
     "elderly_mode": false,
     "preferred_language": "uz",
@@ -161,7 +161,7 @@ Authorization: Bearer {accessToken}
   "success": true,
   "data": {
     "id": "settings-uuid",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "user_id": "550e8400-e29b-41d4-a716-446655430000",
     "notifications_enabled": true,
     "elderly_mode": false,
     "preferred_language": "uz",

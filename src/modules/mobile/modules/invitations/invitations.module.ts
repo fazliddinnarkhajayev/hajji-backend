@@ -10,6 +10,6 @@ import { WebSocketModule } from 'src/modules/websocket/websocket.module';
   imports: [WebSocketModule],
   controllers: [InvitationsController],
   providers: [InvitationsService, InvitationsDao, PilgrimsDao, PilgrimAgencyHistoryDao],
-  exports: [InvitationsService, InvitationsDao],
+  exports: [InvitationsService],
 })
 export class InvitationsModule {}

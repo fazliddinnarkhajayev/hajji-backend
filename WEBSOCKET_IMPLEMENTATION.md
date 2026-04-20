@@ -45,7 +45,7 @@ Connect with optional userId query parameter:
 ```typescript
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:4000', {
+const socket = io('http://localhost:3000', {
   query: {
     userId: 'user123'
   }
@@ -227,7 +227,7 @@ Modify the CORS settings in `websocket.gateway.ts` if needed.
 
 ### Port
 
-WebSocket runs on the same port as the HTTP server (default: 4000).
+WebSocket runs on the same port as the HTTP server (default: 3000).
 
 ## Real-time Use Cases
 
@@ -290,7 +290,7 @@ npm install socket.io-client
 ```typescript
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:4000');
+const socket = io('http://localhost:3000');
 socket.emit('ping');
 ```
 
@@ -313,7 +313,7 @@ def connect():
 def on_pong(data):
     print('Pong:', data)
 
-sio.connect('http://localhost:4000')
+sio.connect('http://localhost:3000')
 sio.emit('ping')
 ```
 

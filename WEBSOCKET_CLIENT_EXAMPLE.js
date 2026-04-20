@@ -14,7 +14,7 @@
  */
 
 // Initialize socket connection with userId
-const socket = io('http://localhost:4000', {
+const socket = io('http://localhost:3000', {
   query: {
     userId: 'user123' // Pass user ID from auth
   }

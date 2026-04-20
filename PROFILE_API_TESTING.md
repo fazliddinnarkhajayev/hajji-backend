@@ -44,7 +44,7 @@ curl -X GET "$API_URL/profile/me" \
 {
   "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "550e8400-e29b-41d4-a716-446655430000",
     "first_name": "Ahmed",
     "last_name": "Hassan",
     "middle_name": null,
@@ -85,7 +85,7 @@ curl -X GET "$API_URL/profile/settings" \
   "success": true,
   "data": {
     "id": "settings-uuid-here",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "user_id": "550e8400-e29b-41d4-a716-446655430000",
     "notifications_enabled": true,
     "elderly_mode": false,
     "preferred_language": "uz",
@@ -117,7 +117,7 @@ curl -X PUT "$API_URL/profile/language" \
 {
   "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "550e8400-e29b-41d4-a716-446655430000",
     "first_name": "Ahmed",
     "last_name": "Hassan",
     "language": "uz",
@@ -209,7 +209,7 @@ curl -X PUT "$API_URL/profile/notifications" \
   "success": true,
   "data": {
     "id": "settings-uuid",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "user_id": "550e8400-e29b-41d4-a716-446655430000",
     "notifications_enabled": true,
     "elderly_mode": false,
     "preferred_language": "uz",
@@ -264,7 +264,7 @@ curl -X PUT "$API_URL/profile/me" \
 {
   "success": true,
   "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "id": "550e8400-e29b-41d4-a716-446655430000",
     "first_name": "Mohammed",
     "last_name": "Ibrahim",
     "email": "mohammed@example.com",

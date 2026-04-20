@@ -45,4 +45,4 @@ npm run db:migrate
 npm run start:dev
 ```
 
-Default port is `4000`, so frontend `VITE_API_BASE_URL` should be `http://localhost:4000/api`.
+Default port is `3000`, so frontend `VITE_API_BASE_URL` should be `http://localhost:3000/api`.
