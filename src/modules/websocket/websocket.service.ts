@@ -78,6 +78,7 @@ export class WebSocketService {
   broadcastToUser(userId: string, event: string, data: any): void {
     if (this.server) {
       const clients = this.getClientsByUserId(userId);
+      console.log('Broadcasting to user', userId, 'clients:', clients.map(c => c.id));
       clients.forEach((client) => {
         this.server.to(client.id).emit(event, data);
       });

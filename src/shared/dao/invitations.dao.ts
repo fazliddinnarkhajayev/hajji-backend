@@ -47,7 +47,7 @@ export class InvitationsDao extends BaseDao<Invitation> {
     trx?: Knex.Transaction,
   ): Promise<Invitation | undefined> {
     const record = await this.qb(trx)
-      .where({ id })
+      .where({ [`${this.tableName}.id`]: id })
       .leftJoin(
         TABLE_NAMES.PILGRIMS,
         `${this.tableName}.pilgrim_id`,

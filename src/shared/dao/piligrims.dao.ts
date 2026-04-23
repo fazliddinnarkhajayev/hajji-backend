@@ -21,6 +21,7 @@ export interface Pilgrim {
   user_id: string;
   status: 'ACTIVE' | 'BLOCKED';
   is_blocked: boolean;
+  is_guide?: boolean;
   blocked_at?: Date | null;
   notifications_enabled?: boolean;
   elderly_mode?: boolean;
@@ -260,5 +261,23 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       page_size: pageSize,
       page_index: pageIndex,
     });
+  }
+
+  async findGuidesByAgency(agencyId: string, trx?: Knex.Transaction): Promise<Pilgrim[]> {
+    const records = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .select(
+        `${TABLE_NAMES.PILGRIMS}.*`,
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+      )
+      .where({
+        [`${TABLE_NAMES.PILGRIMS}.agency_id`]: agencyId,
+        [`${TABLE_NAMES.PILGRIMS}.is_guide`]: true,
+        [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false,
+      })
+      .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .orderBy(`${TABLE_NAMES.PILGRIMS}.first_name`);
+
+    return records as Pilgrim[];
   }
 }

@@ -22,9 +22,23 @@ export interface Agency {
   is_deleted?: boolean;
 }
 
+export interface AgencyReference {
+  id: string;
+  name: string;
+}
+
 @Injectable()
 export class AgenciesDao extends BaseDao<Agency> {
   constructor(@Inject(KNEX_CONNECTION) db: Knex) {
     super(TABLE_NAMES.AGENCIES, db);
+  }
+
+  async findAllReference(trx?: Knex.Transaction): Promise<AgencyReference[]> {
+    const records = await this.qb(trx)
+      .select('id', 'name')
+      .where({ is_deleted: false })
+      .whereNull('deleted_at')
+      .orderBy('name');
+    return records as AgencyReference[];
   }
 }

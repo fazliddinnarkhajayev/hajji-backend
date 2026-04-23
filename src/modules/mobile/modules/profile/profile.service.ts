@@ -123,6 +123,7 @@ export class ProfileService {
       country: pilgrim.country,
       region: pilgrim.region,
       district: pilgrim.district,
+      agency: pilgrim.agency,
     };
   }
 

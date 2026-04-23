@@ -18,6 +18,11 @@ export class AgenciesController {
     return this.agenciesService.findAllPaginated({}, pagination.page_index, pagination.page_size);
   }
 
+  @Get('reference/list')
+  async findAllReference() {
+    return this.agenciesService.findAllReference();
+  }
+
   @Get('requests')
   async findRequests(@Query() pagination: PaginationDto) {
     return this.agenciesService.findRequests(pagination.page_index, pagination.page_size);
@@ -26,6 +31,11 @@ export class AgenciesController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.agenciesService.findOne(id);
+  }
+
+  @Get(':id/guides')
+  async findGuidesByAgency(@Param('id') id: string) {
+    return this.agenciesService.findGuidesByAgency(id);
   }
 
   @Patch(':id')

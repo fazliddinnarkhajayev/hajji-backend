@@ -17,7 +17,7 @@ export interface UserProfile {
   updated_at: Date;
   is_deleted: boolean;
   // Joined data
-    country?: {
+  country?: {
     id?: string;
     name?: string;
     soato?: string;
@@ -32,6 +32,10 @@ export interface UserProfile {
     name?: string;
     soato?: string;
   };
+  agency?: {
+    id?: string;
+    name?: string;
+  } | null;
 }
 
 export interface UserProfileSettings {

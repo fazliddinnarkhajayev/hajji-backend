@@ -63,10 +63,10 @@ export class InvitationsService {
     user: any,
     body: UpdateInvitationStatusDto,
   ): Promise<Invitation> {
-    const { pilgrim_id } = user;
     const { status } = body;
+    const pilgrim_id = user.pilgrim?.id;
 
-    // Get invitation
+    // Get invitation (before transaction - for validation)
     const invitation = await this.invitationsDao.findById(invitationId);
     if (!invitation) {
       throw new NotFoundException('Invitation not found');
@@ -96,29 +96,46 @@ export class InvitationsService {
       }
     }
 
-    // Update invitation status
-    const updated = await this.invitationsDao.updateById(invitationId, {
-      status,
-      updated_at: new Date(),
-    } as any);
+    // Execute all updates in a transaction
+    const updated = await this.invitationsDao.transaction(async (trx) => {
+      // Update invitation status
+      const invitationUpdated = await this.invitationsDao.updateById(
+        invitationId,
+        {
+          status,
+          updated_at: new Date(),
+        } as any,
+        trx,
+      );
 
-    // If accepted, update pilgrim's agency_id and create history record
-    if (status === InvitationStatus.ACCEPTED) {
-      await this.pilgrimsDao.updateById(pilgrim_id, {
-        agency_id: invitation.agency_id,
-        updated_at: new Date(),
-      } as any);
+      // If accepted, update pilgrim's agency_id and create history record
+      if (status === InvitationStatus.ACCEPTED) {
+        await this.pilgrimsDao.updateById(
+          pilgrim_id,
+          {
+            agency_id: invitation.agency_id,
+            updated_at: new Date(),
+          } as any,
+          trx,
+        );
 
-      // Create history record
-      await this.pilgrimAgencyHistoryDao.insert({
-        pilgrim_id,
-        agency_id: invitation.agency_id,
-        action: 'assigned',
-        notes: `Pilgrim accepted invitation from agency`,
-      } as any);
-    }
+        // Create history record
+        await this.pilgrimAgencyHistoryDao.insert(
+          {
+            pilgrim_id,
+            agency_id: invitation.agency_id,
+            user_id: user.id,
+            action: 'assigned',
+            notes: `Pilgrim accepted invitation from agency`,
+          } as any,
+          trx,
+        );
+      }
 
-    // Send notification to agency about the response
+      return invitationUpdated;
+    });
+
+    // Send notification to agency about the response (outside transaction)
     const updatedWithDetails = await this.invitationsDao.findById(invitationId);
     this.webSocketService.broadcastToUser(
       invitation.created_by_id,

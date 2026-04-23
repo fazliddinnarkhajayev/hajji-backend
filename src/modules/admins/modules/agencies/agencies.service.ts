@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { AgenciesDao, Agency } from './agencies.dao';
 import { BaseService } from 'src/shared/services/base.service';
+import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 
 @Injectable()
 export class AgenciesService extends BaseService<Agency, AgenciesDao> {
-  constructor(private readonly agenciesDao: AgenciesDao) {
+  constructor(
+    private readonly agenciesDao: AgenciesDao,
+    private readonly pilgrimsDao: PilgrimsDao,
+  ) {
     super(agenciesDao);
   }
 
@@ -22,5 +26,13 @@ export class AgenciesService extends BaseService<Agency, AgenciesDao> {
 
   async reject(id: string) {
     return this.agenciesDao.updateById(id, { status: 'REJECTED' } as Partial<Agency>);
+  }
+
+  async findAllReference() {
+    return this.agenciesDao.findAllReference();
+  }
+
+  async findGuidesByAgency(agencyId: string) {
+    return this.pilgrimsDao.findGuidesByAgency(agencyId);
   }
 }
