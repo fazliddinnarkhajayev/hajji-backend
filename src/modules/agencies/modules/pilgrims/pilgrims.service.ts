@@ -37,4 +37,33 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     }
     return pilgrim;
   }
+
+  async setAsGuide(pilgrimId: string, agencyId: string): Promise<any> {
+    // Get the pilgrim
+    const pilgrim = await this.pilgrimsDao.findById(pilgrimId);
+    if (!pilgrim) {
+      throw new NotFoundException('Pilgrim not found');
+    }
+
+    // Verify the pilgrim belongs to this agency
+    if (pilgrim.agency_id !== agencyId) {
+      throw new BadRequestException('Pilgrim does not belong to this agency');
+    }
+
+    // Update the pilgrim as guide
+    return this.pilgrimsDao.updateById(pilgrimId, {
+      is_guide: true,
+      updated_at: new Date(),
+    } as Partial<Pilgrim>);
+  }
+
+  async getGuides(user: any, query: any) {
+    const { page = '1', limit = '10' } = query;
+    const pageIndex = parseInt(page, 10);
+    const pageSize = parseInt(limit, 10);
+
+    // Get guides for this agency
+    const where: any = { is_deleted: false, agency_id: user.agency_id, is_guide: true };
+    return await this.pilgrimsDao.findManyPaginated(where, pageIndex, pageSize);
+  }
 }

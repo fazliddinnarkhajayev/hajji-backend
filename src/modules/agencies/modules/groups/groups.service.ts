@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { GroupsDao, Group } from 'src/modules/admins/modules/groups/groups.dao';
 import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
+import { UpdateGroupDto } from './dto/update-group.dto';
 
 @Injectable()
 export class GroupsService {
@@ -27,5 +28,14 @@ export class GroupsService {
       throw new NotFoundException('Group not found for this agency');
     }
     return group;
+  }
+
+  async update(
+    id: string,
+    agencyId: string,
+    updateGroupDto: UpdateGroupDto,
+  ): Promise<Group | undefined> {
+    const group = await this.findOne(id, agencyId);
+    return this.groupsDao.updateById(id, updateGroupDto);
   }
 }

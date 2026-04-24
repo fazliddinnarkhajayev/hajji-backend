@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
@@ -40,6 +41,8 @@ export interface TokenPair {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
     private readonly usersAuthDao: UsersAuthDao,
@@ -205,33 +208,41 @@ export class AuthService {
     const phone = this.normalizePhone(dto.phone);
 
     return this.db.transaction(async (trx) => {
-      // Find latest OTP session
-      const otpSession = await this.otpSessionsDao.findLatestOtpSession(
-        phone,
-        trx,
-      );
-      if (!otpSession) {
-        throw new BadRequestException("OTP not found or expired");
-      }
+      // TEST BYPASS: Allow test code "123456" to skip OTP verification
+      const isTestCode = dto.code === "123456";
 
-      // Verify code matches
-      if (otpSession.code !== dto.code) {
-        await this.otpSessionsDao.incrementOtpAttempts(otpSession.id, trx);
-        throw new BadRequestException("Invalid OTP code");
-      }
+      if (!isTestCode) {
+        // Find latest OTP session
+        const otpSession = await this.otpSessionsDao.findLatestOtpSession(
+          phone,
+          trx,
+        );
+        if (!otpSession) {
+          throw new BadRequestException("OTP not found or expired");
+        }
 
-      // Check if OTP is already used
-      if (otpSession.is_used) {
-        throw new BadRequestException("OTP has already been used");
-      }
+        // Verify code matches
+        if (otpSession.code !== dto.code) {
+          await this.otpSessionsDao.incrementOtpAttempts(otpSession.id, trx);
+          throw new BadRequestException("Invalid OTP code");
+        }
 
-      // Check if OTP is expired
-      if (new Date() > otpSession.expires_at) {
-        throw new BadRequestException("OTP has expired");
-      }
+        // Check if OTP is already used
+        if (otpSession.is_used) {
+          throw new BadRequestException("OTP has already been used");
+        }
 
-      // Mark OTP as used
-      await this.otpSessionsDao.verifyOtpSession(otpSession.id, trx);
+        // Check if OTP is expired
+        if (new Date() > otpSession.expires_at) {
+          throw new BadRequestException("OTP has expired");
+        }
+
+        // Mark OTP as used
+        await this.otpSessionsDao.verifyOtpSession(otpSession.id, trx);
+      } else {
+        // Test mode: log that test code was used
+        this.logger.warn(`TEST MODE: OTP verification bypassed for phone ${phone} with test code`);
+      }
 
       // Find or create user (PILGRIM)
       let user = await this.usersAuthDao.findUserBy({ username: phone }, trx);

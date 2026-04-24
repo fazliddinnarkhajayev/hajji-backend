@@ -1,6 +1,7 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Patch, Body, Put } from '@nestjs/common';
 import { GroupsService } from './groups.service';
 import { CurrentUser } from 'src/shared/decorators';
+import { UpdateGroupDto } from './dto/update-group.dto';
 
 @Controller('agencies/groups')
 export class GroupsController {
@@ -23,5 +24,14 @@ export class GroupsController {
     @CurrentUser() user: any,
   ) {
     return this.groupsService.findOne(id, user.agency_id);
+  }
+
+  @Put(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() updateGroupDto: UpdateGroupDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.groupsService.update(id, user.agency_id, updateGroupDto);
   }
 }
