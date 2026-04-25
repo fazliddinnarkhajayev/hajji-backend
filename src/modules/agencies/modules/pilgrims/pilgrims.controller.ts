@@ -36,4 +36,12 @@ export class AgencyPilgrimsController {
     return this.pilgrimsService.setAsGuide(pilgrimId, user.agency_id);
   }
 
+  @Patch(':pilgrimId/remove-as-guide')
+  async removeAsGuide(
+    @Param('pilgrimId') pilgrimId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.pilgrimsService.removeAsGuide(pilgrimId, user.agency_id);
+  }
+
 }

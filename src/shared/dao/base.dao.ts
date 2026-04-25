@@ -56,6 +56,7 @@ export class BaseDao<T extends { id: string }> {
     const records = await this.qb(trx)
       .where({ ...where, is_deleted: false } as Record<string, unknown>)
       .whereNull('deleted_at')
+      .orderBy('created_at', 'desc')
       .limit(pageSize)
       .offset(offset);
 

@@ -155,6 +155,7 @@ export class InvitationsDao extends BaseDao<Invitation> {
           ) as user
         `),
       )
+      .orderBy(`${this.tableName}.created_at`, 'desc')
       .limit(pageSize)
       .offset(offset);
 

@@ -32,7 +32,7 @@ export class AgenciesService extends BaseService<Agency, AgenciesDao> {
     return this.agenciesDao.findAllReference();
   }
 
-  async findGuidesByAgency(agencyId: string) {
-    return this.pilgrimsDao.findGuidesByAgency(agencyId);
+  async findGuidesByAgency(agencyId: string, hasGroup?: boolean) {
+    return this.pilgrimsDao.findGuidesByAgency(agencyId, hasGroup);
   }
 }

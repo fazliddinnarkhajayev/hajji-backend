@@ -34,8 +34,9 @@ export class AgenciesController {
   }
 
   @Get(':id/guides')
-  async findGuidesByAgency(@Param('id') id: string) {
-    return this.agenciesService.findGuidesByAgency(id);
+  async findGuidesByAgency(@Param('id') id: string, @Query('has_group') hasGroup?: string) {
+    const hasGroupBool = hasGroup !== undefined ? hasGroup === 'true' : undefined;
+    return this.agenciesService.findGuidesByAgency(id, hasGroupBool);
   }
 
   @Patch(':id')

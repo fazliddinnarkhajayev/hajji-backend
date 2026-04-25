@@ -197,6 +197,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
         builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
       })
       .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc')
       .limit(pageSize)
       .offset(offset);
 
@@ -252,6 +253,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       })
       .where(`${TABLE_NAMES.PILGRIMS}.phone`, 'ILIKE', `%${phone}%`)
       .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc')
       .limit(pageSize)
       .offset(offset);
 
@@ -263,8 +265,82 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
     });
   }
 
-  async findGuidesByAgency(agencyId: string, trx?: Knex.Transaction): Promise<Pilgrim[]> {
+  async findGuidesPaginatedWithGroupFilter(
+    where: Partial<Pilgrim> = {},
+    pageIndex: number = 1,
+    pageSize: number = 10,
+    hasGroup: boolean,
+    trx?: Knex.Transaction,
+  ) {
+    const { PaginatedResult } = await import('../interfaces/pagination.interface');
+    
+    const offset = (pageIndex - 1) * pageSize;
+
+    // Build base query for filters
+    const buildFilteredQuery = () => {
+      let baseQuery = this.qb(trx)
+        .where((builder) => {
+          Object.entries(where).forEach(([key, value]) => {
+            if (key !== 'is_deleted') {
+              builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
+            }
+          });
+          builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
+        })
+        .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`);
+
+      // Apply has_group filter
+      if (hasGroup) {
+        baseQuery = baseQuery
+          .innerJoin(TABLE_NAMES.GROUPS, `${TABLE_NAMES.PILGRIMS}.id`, `${TABLE_NAMES.GROUPS}.guide_pilgrim_id`)
+          .where({ [`${TABLE_NAMES.GROUPS}.is_deleted`]: false })
+          .whereNull(`${TABLE_NAMES.GROUPS}.deleted_at`);
+      } else {
+        baseQuery = baseQuery
+          .leftJoin(TABLE_NAMES.GROUPS, `${TABLE_NAMES.PILGRIMS}.id`, `${TABLE_NAMES.GROUPS}.guide_pilgrim_id`)
+          .whereNull(`${TABLE_NAMES.GROUPS}.id`);
+      }
+
+      return baseQuery;
+    };
+
+    // Get total count
+    const [{ count }] = await buildFilteredQuery()
+      .countDistinct(`${TABLE_NAMES.PILGRIMS}.id as count`);
+
+    const totalItemsCount = Number(count);
+    const totalPagesCount = Math.ceil(totalItemsCount / pageSize);
+
+    // Create subquery to get distinct IDs with pagination
+    const idsSubquery = buildFilteredQuery()
+      .select(`${TABLE_NAMES.PILGRIMS}.id`, `${TABLE_NAMES.PILGRIMS}.created_at`)
+      .distinct()
+      .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc')
+      .limit(pageSize)
+      .offset(offset)
+      .as('pilgrim_ids');
+
+    // Get full records with agency join
     const records = await this.qb(trx)
+      .from(idsSubquery)
+      .innerJoin(TABLE_NAMES.PILGRIMS, 'pilgrim_ids.id', `${TABLE_NAMES.PILGRIMS}.id`)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .select(
+        `${TABLE_NAMES.PILGRIMS}.*`,
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+      )
+      .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc');
+
+    return new PaginatedResult(records as Pilgrim[], {
+      total_items_count: totalItemsCount,
+      total_pages_count: totalPagesCount,
+      page_size: pageSize,
+      page_index: pageIndex,
+    });
+  }
+
+  async findGuidesByAgency(agencyId: string, hasGroup?: boolean, trx?: Knex.Transaction): Promise<Pilgrim[]> {
+    let query = this.qb(trx)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
@@ -275,7 +351,26 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
         [`${TABLE_NAMES.PILGRIMS}.is_guide`]: true,
         [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false,
       })
-      .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+      .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`);
+
+    // Apply has_group filter if provided
+    if (hasGroup !== undefined) {
+      if (hasGroup) {
+        // Guides with at least one group
+        query = query
+          .innerJoin(TABLE_NAMES.GROUPS, `${TABLE_NAMES.PILGRIMS}.id`, `${TABLE_NAMES.GROUPS}.guide_pilgrim_id`)
+          .where({ [`${TABLE_NAMES.GROUPS}.is_deleted`]: false })
+          .whereNull(`${TABLE_NAMES.GROUPS}.deleted_at`);
+      } else {
+        // Guides without any group
+        query = query
+          .leftJoin(TABLE_NAMES.GROUPS, `${TABLE_NAMES.PILGRIMS}.id`, `${TABLE_NAMES.GROUPS}.guide_pilgrim_id`)
+          .whereNull(`${TABLE_NAMES.GROUPS}.id`);
+      }
+    }
+
+    const records = await query
+      .distinct(`${TABLE_NAMES.PILGRIMS}.id`)
       .orderBy(`${TABLE_NAMES.PILGRIMS}.first_name`);
 
     return records as Pilgrim[];

@@ -14,4 +14,5 @@ export const TABLE_NAMES = {
   PILGRIM_AGENCY_HISTORY: 'pilgrim_agency_history',
   INVITATIONS: 'invitations',
   GROUPS: 'groups',
+  GROUP_MEMBERS: 'group_members',
 } as const;

@@ -119,6 +119,7 @@ export class GroupsDao extends BaseDao<Group> {
         builder.where(`${TABLE_NAMES.GROUPS}.is_deleted`, false);
       })
       .whereNull(`${TABLE_NAMES.GROUPS}.deleted_at`)
+      .orderBy(`${TABLE_NAMES.GROUPS}.created_at`, 'desc')
       .limit(pageSize)
       .offset(offset);
 
