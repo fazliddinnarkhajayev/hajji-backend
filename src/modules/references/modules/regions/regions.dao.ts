@@ -7,6 +7,7 @@ import { BaseDao } from 'src/shared/dao/base.dao';
 export interface Region {
   id: string;
   name: string;
+  country_id?: string;
   soato?: string;
   createdAt?: Date;
   updatedAt?: Date;

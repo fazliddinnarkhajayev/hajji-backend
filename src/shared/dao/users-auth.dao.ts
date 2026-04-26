@@ -7,7 +7,6 @@ import { TABLE_NAMES } from '../constants/table-names';
 export interface UserRecord {
   id: string;
   phone: string | null;
-  email: string | null;
   password_hash: string | null;
   username: string | null;
   type: 'ADMIN' | 'PILGRIM';
@@ -22,7 +21,7 @@ export interface UserRecord {
 
 @Injectable()
 export class UsersAuthDao {
-  constructor(@Inject(KNEX_CONNECTION) private readonly db: Knex) {}
+  constructor(@Inject(KNEX_CONNECTION) private readonly db: Knex) { }
 
   private qb(trx?: Knex.Transaction) {
     return trx
@@ -46,16 +45,16 @@ export class UsersAuthDao {
       .first();
   }
 
-  async findUserByEmail(email: string, trx?: Knex.Transaction): Promise<UserRecord | undefined> {
+  async findUserByEmail(username: string, trx?: Knex.Transaction): Promise<UserRecord | undefined> {
     return this.qb(trx)
-      .where({ email })
+      .where({ username })
       .first();
   }
 
   async createUser(
     type: 'ADMIN' | 'PILGRIM',
     phone: string | null = null,
-    email: string | null = null,
+    username: string | null = null,
     passwordHash: string | null = null,
     trx?: Knex.Transaction,
   ): Promise<UserRecord> {
@@ -63,7 +62,7 @@ export class UsersAuthDao {
       .insert({
         id: randomUUID(),
         phone,
-        email,
+        username,
         password_hash: passwordHash,
         type,
         status: 'ACTIVE',

@@ -2,20 +2,24 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestj
 import { RegionsService } from './regions.service';
 import { CreateRegionDto } from './dto/create-region.dto';
 import { UpdateRegionDto } from './dto/update-region.dto';
-import { PaginationDto } from 'src/shared/dto/pagination.dto';
+import { IsPublic } from 'src/shared/decorators';
+import { FindRegionsQueryDto } from './dto/find-regions-query.dto';
 
 @Controller('references/regions')
 export class RegionsController {
-  constructor(private readonly regionsService: RegionsService) {}
+  constructor(private readonly regionsService: RegionsService) { }
 
   @Post()
   async create(@Body() createRegionDto: CreateRegionDto) {
     return this.regionsService.create(createRegionDto);
   }
 
+  @IsPublic()
   @Get()
-  async findAll(@Query() pagination: PaginationDto) {
-    return this.regionsService.findAllPaginated({}, pagination.page_index, pagination.page_size);
+  async findAll(@Query() query: FindRegionsQueryDto) {
+    const filters = query.country_id ? { country_id: query.country_id } : {};
+
+    return this.regionsService.findAllPaginated(filters, query.page_index, query.page_size);
   }
 
   @Get(':id')

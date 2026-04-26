@@ -1,4 +1,4 @@
-import { IsIn, IsString, IsPhoneNumber, IsUUID, MinLength, ValidateIf } from 'class-validator';
+import { IsIn, IsString, IsPhoneNumber, IsOptional, MinLength, ValidateIf } from 'class-validator';
 
 export class RegisterDto {
   @IsIn(['MANUAL', 'GOOGLE'])
@@ -7,15 +7,37 @@ export class RegisterDto {
   @ValidateIf((dto) => dto.type === 'MANUAL')
   @IsString()
   @MinLength(1)
-  full_name?: string;
+  first_name?: string;
+
+  @ValidateIf((dto) => dto.type === 'MANUAL')
+  @IsString()
+  @MinLength(1)
+  last_name?: string;
+
+  @IsOptional()
+  @IsString()
+  middle_name?: string;
 
   @ValidateIf((dto) => dto.type === 'MANUAL')
   @IsPhoneNumber()
   phone?: string;
 
   @ValidateIf((dto) => dto.type === 'MANUAL')
-  @IsUUID()
+  @IsString()
+  @MinLength(1)
   country_id?: string;
+
+  @IsOptional()
+  @IsString()
+  region_id?: string;
+
+  @IsOptional()
+  @IsString()
+  district_id?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
 
   @ValidateIf((dto) => dto.type === 'GOOGLE')
   @IsString()

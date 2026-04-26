@@ -10,11 +10,14 @@ import { RefreshTokensDao } from '../../shared/dao/refresh-tokens.dao';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import { AgencyUsersDao } from '../../modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
 import { UsersModule } from '../users/users.module';
+import { CountriesDao } from '../references/modules/countries/countries.dao';
+import { RegionsDao } from '../references/modules/regions/regions.dao';
+import { DistrictsDao } from '../references/modules/districts/districts.dao';
 
 @Module({
   imports: [CoreModule, JwtModule.register({}), UsersModule],
   controllers: [AuthController],
-  providers: [AuthService, UsersAuthDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao],
+  providers: [AuthService, UsersAuthDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao, CountriesDao, RegionsDao, DistrictsDao],
   exports: [AuthService],
 })
-export class AuthModule {}
+export class AuthModule { }

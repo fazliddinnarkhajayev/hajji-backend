@@ -3,5 +3,5 @@ import { ReferencesService } from './references.service';
 
 @Controller('references')
 export class ReferencesController {
-  constructor(private readonly referencesService: ReferencesService) {}
+  constructor(private readonly referencesService: ReferencesService) { }
 }

@@ -2,20 +2,24 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestj
 import { DistrictsService } from './districts.service';
 import { CreateDistrictDto } from './dto/create-district.dto';
 import { UpdateDistrictDto } from './dto/update-district.dto';
-import { PaginationDto } from 'src/shared/dto/pagination.dto';
+import { IsPublic } from 'src/shared/decorators/is-public.decorator';
+import { FindDistrictsQueryDto } from './dto/find-districts-query.dto';
 
 @Controller('references/districts')
 export class DistrictsController {
-  constructor(private readonly districtsService: DistrictsService) {}
+  constructor(private readonly districtsService: DistrictsService) { }
 
   @Post()
   async create(@Body() createDistrictDto: CreateDistrictDto) {
     return this.districtsService.create(createDistrictDto);
   }
 
+  @IsPublic()
   @Get()
-  async findAll(@Query() pagination: PaginationDto) {
-    return this.districtsService.findAllPaginated({}, pagination.page_index, pagination.page_size);
+  async findAll(@Query() query: FindDistrictsQueryDto) {
+    const filters = query.region_id ? { region_id: query.region_id } : {};
+
+    return this.districtsService.findAllPaginated(filters, query.page_index, query.page_size);
   }
 
   @Get(':id')

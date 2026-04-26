@@ -27,6 +27,10 @@ import { AgencyUsersDao } from "../../modules/admins/modules/agencies/modules/ag
 import { KNEX_CONNECTION } from "src/core/database/database.constants";
 import { UsersService } from "../users/users.service";
 import { UserTypesEnum } from "src/shared/enums/user-types.enum";
+import { CountriesDao } from "../references/modules/countries/countries.dao";
+import { RegionsDao } from "../references/modules/regions/regions.dao";
+import { DistrictsDao } from "../references/modules/districts/districts.dao";
+import { randomUUID } from "crypto";
 
 export interface JwtPayload {
   user_id: string;
@@ -54,7 +58,10 @@ export class AuthService {
     private readonly refreshTokensDao: RefreshTokensDao,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {}
+    private readonly countriesDao: CountriesDao,
+    private readonly regionsDao: RegionsDao,
+    private readonly districtsDao: DistrictsDao,
+  ) { }
 
   private normalizePhone(phone: string): string {
     return phone.replace(/\D/g, "");
@@ -175,6 +182,25 @@ export class AuthService {
   ): Promise<{ success: boolean; expires_in_minutes: number }> {
     const phone = this.normalizePhone(dto.phone);
 
+    // Validate user exists, is a PILGRIM, and has a pilgrim profile
+    const user = await this.usersAuthDao.findUserBy({ username: phone });
+    if (!user) {
+      throw new BadRequestException("No account found for this phone number");
+    }
+    if (user.type !== UserTypesEnum.PILGRIM) {
+      throw new ForbiddenException("Account is not a pilgrim account");
+    }
+    if (user.is_blocked) {
+      throw new ForbiddenException("User account is blocked");
+    }
+    if (user.deleted_at) {
+      throw new ForbiddenException("User account has been deleted");
+    }
+    const pilgrim = await this.pilgrimsDao.findByUserId(user.id);
+    if (!pilgrim) {
+      throw new BadRequestException("No pilgrim profile found for this account");
+    }
+
     // Generate OTP code (6 digits)
     const code = String(randomInt(100000, 999999));
 
@@ -244,26 +270,16 @@ export class AuthService {
         this.logger.warn(`TEST MODE: OTP verification bypassed for phone ${phone} with test code`);
       }
 
-      // Find or create user (PILGRIM)
-      let user = await this.usersAuthDao.findUserBy({ username: phone }, trx);
-      let isNewUser = false;
+      // Find user by phone (username)
+      const user = await this.usersAuthDao.findUserBy({ username: phone }, trx);
 
       if (!user) {
-        isNewUser = true;
-        user = await this.usersAuthDao.createUser(
-          "PILGRIM",
-          phone,
-          null,
-          null,
-          trx,
-        );
+        throw new BadRequestException("No account found for this phone number");
+      }
 
-        // Create pilgrim profile with default country (can be updated later)
-        // Using a placeholder country ID - in real scenario, user should provide this
-        const defaultCountryId =
-          this.configService.get<string>("DEFAULT_COUNTRY_ID") ||
-          "00000000-0000-0000-0000-000000000000";
-        // await this.pilgrimsDao.createPilgrim(user.id, defaultCountryId, null, trx);
+      // Ensure user is a PILGRIM
+      if (user.type !== UserTypesEnum.PILGRIM) {
+        throw new ForbiddenException("Account is not a pilgrim account");
       }
 
       // Check if user is blocked
@@ -276,14 +292,14 @@ export class AuthService {
         throw new ForbiddenException("User account has been deleted");
       }
 
+      // Ensure pilgrim profile exists
+      const pilgrim = await this.pilgrimsDao.findByUserId(user.id, trx);
+      if (!pilgrim) {
+        throw new BadRequestException("No pilgrim profile found for this account");
+      }
+
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
-
-      // Get pilgrim data
-      // const pilgrim = await this.pilgrimsDao.findPilgrimByUserId(user.id, trx);
-      // if (!pilgrim) {
-      //   throw new BadRequestException('Failed to retrieve pilgrim profile');
-      // }
 
       // Generate tokens
       const tokens = await this.generateTokens(
@@ -295,7 +311,7 @@ export class AuthService {
 
       return {
         ...tokens,
-        is_new_user: isNewUser,
+        is_new_user: false,
       };
     });
   }
@@ -317,41 +333,75 @@ export class AuthService {
   private async registerPilgrimManual(
     dto: RegisterDto,
   ): Promise<{ access_token: string; refresh_token: string; user: any }> {
-    if (!dto.full_name || !dto.phone || !dto.country_id) {
+    if (!dto.first_name || !dto.last_name || !dto.phone || !dto.country_id) {
       throw new BadRequestException(
-        "Missing required fields: full_name, phone, country_id",
+        "Missing required fields: first_name, last_name, phone, country_id",
       );
     }
 
     const phone = this.normalizePhone(dto.phone);
 
     return this.db.transaction(async (trx) => {
-      // Check if phone already exists
-      const existingUser = await this.usersAuthDao.findUserBy({ phone }, trx);
+      // Check if user with this phone already exists
+      const existingUser = await this.usersAuthDao.findUserBy({ username: phone }, trx);
       if (existingUser) {
         throw new ConflictException("Phone number is already registered");
       }
 
-      // Create user
+      // Validate country exists
+      const country = await this.countriesDao.findOne({ id: dto.country_id }, trx);
+      if (!country) {
+        throw new BadRequestException(`Country not found: ${dto.country_id}`);
+      }
+
+      // Validate region if provided
+      if (dto.region_id) {
+        const region = await this.regionsDao.findOne({ id: dto.region_id } as any, trx);
+        if (!region) {
+          throw new BadRequestException(`Region not found: ${dto.region_id}`);
+        }
+      }
+
+      // Validate district if provided
+      if (dto.district_id) {
+        const district = await this.districtsDao.findOne({ id: dto.district_id } as any, trx);
+        if (!district) {
+          throw new BadRequestException(`District not found: ${dto.district_id}`);
+        }
+      }
+
+      // Create user: username = phone, type = PILGRIM
       const user = await this.usersAuthDao.createUser(
         "PILGRIM",
         phone,
-        null,
+        phone, // username = phone
         null,
         trx,
       );
 
       // Create pilgrim profile
-      // await this.pilgrimsDao.createPilgrim(user.id, dto.country_id, dto.full_name, trx);
+      const pilgrim = await this.pilgrimsDao.insert({
+        id: randomUUID(),
+        user_id: user.id,
+        first_name: dto.first_name,
+        last_name: dto.last_name,
+        full_name: `${dto.first_name} ${dto.last_name}`.trim(),
+        middle_name: dto.middle_name ?? null,
+        phone,
+        country_id: dto.country_id,
+        region_id: dto.region_id ?? null,
+        district_id: dto.district_id ?? null,
+        language: dto.language ?? null,
+        status: 'ACTIVE',
+        is_blocked: false,
+        created_by_id: user.id,
+        created_at: new Date(),
+        updated_at: new Date(),
+        is_deleted: false,
+      } as any, trx);
 
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
-
-      // Get pilgrim data
-      // const pilgrim = await this.pilgrimsDao.findPilgrimByUserId(user.id, trx);
-      // if (!pilgrim) {
-      //   throw new BadRequestException('Failed to retrieve pilgrim profile');
-      // }
 
       // Generate tokens
       const tokens = await this.generateTokens(
@@ -363,7 +413,7 @@ export class AuthService {
 
       return {
         ...tokens,
-        user: null,
+        user: pilgrim,
       };
     });
   }

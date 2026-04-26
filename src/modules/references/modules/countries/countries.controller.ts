@@ -3,16 +3,18 @@ import { CountriesService } from './countries.service';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
+import { IsPublic } from 'src/shared/decorators/is-public.decorator';
 
 @Controller('references/countries')
 export class CountriesController {
-  constructor(private readonly countriesService: CountriesService) {}
+  constructor(private readonly countriesService: CountriesService) { }
 
   @Post()
   async create(@Body() dto: CreateCountryDto) {
     return this.countriesService.create(dto);
   }
 
+  @IsPublic()
   @Get()
   async findAll(@Query() pagination: PaginationDto) {
     return this.countriesService.findAllPaginated({}, pagination.page_index, pagination.page_size);
