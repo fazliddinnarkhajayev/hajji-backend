@@ -5,7 +5,7 @@ export class CreateLocationDto {
   name: string;
 
   @IsString()
-  nameAr: string;
+  name_ar: string;
 
   @IsOptional()
   @IsString()

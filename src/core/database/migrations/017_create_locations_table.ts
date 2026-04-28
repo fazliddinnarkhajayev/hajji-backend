@@ -4,7 +4,7 @@ exports.up = async function (knex: Knex) {
   return knex.schema.createTable('locations', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.string('name', 255).notNullable();
-    table.string('nameAr', 255).notNullable();
+    table.string('name_ar', 255).notNullable();
     table.text('description').nullable();
     table.string('emoji', 10).nullable();
     table.json('coords').notNullable();

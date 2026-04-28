@@ -7,7 +7,7 @@ export class UpdateLocationDto {
 
   @IsOptional()
   @IsString()
-  nameAr?: string;
+  name_ar?: string;
 
   @IsOptional()
   @IsString()

@@ -7,7 +7,7 @@ import { BaseDao } from 'src/shared/dao/base.dao';
 export interface Location {
   id: string;
   name: string;
-  nameAr: string;
+  name_ar: string;
   description?: string;
   emoji?: string;
   coords: [number, number] | string;
