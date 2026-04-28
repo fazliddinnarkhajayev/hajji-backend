@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsUUID } from 'class-validator';
 
 export class CreateRegionDto {
   @IsString()
@@ -7,4 +7,8 @@ export class CreateRegionDto {
   @IsOptional()
   @IsString()
   soato?: string;
+
+  @IsOptional()
+  @IsUUID()
+  country_id?: string;
 }

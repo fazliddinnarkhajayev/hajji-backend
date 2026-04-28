@@ -376,8 +376,7 @@ export class AuthService {
         phone,
         phone, // username = phone
         null,
-        trx,
-      );
+        trx,        dto.language ?? null,      );
 
       // Create pilgrim profile
       const pilgrim = await this.pilgrimsDao.insert({
@@ -385,14 +384,11 @@ export class AuthService {
         user_id: user.id,
         first_name: dto.first_name,
         last_name: dto.last_name,
-        full_name: `${dto.first_name} ${dto.last_name}`.trim(),
         middle_name: dto.middle_name ?? null,
         phone,
         country_id: dto.country_id,
         region_id: dto.region_id ?? null,
         district_id: dto.district_id ?? null,
-        language: dto.language ?? null,
-        status: 'ACTIVE',
         is_blocked: false,
         created_by_id: user.id,
         created_at: new Date(),

@@ -6,5 +6,6 @@ import { RegionsDao } from './regions.dao';
 @Module({
   providers: [RegionsService, RegionsDao],
   controllers: [RegionsController],
+  exports: [RegionsService],
 })
 export class RegionsModule {}

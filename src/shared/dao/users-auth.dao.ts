@@ -6,11 +6,10 @@ import { TABLE_NAMES } from '../constants/table-names';
 
 export interface UserRecord {
   id: string;
-  phone: string | null;
   password_hash: string | null;
   username: string | null;
   type: 'ADMIN' | 'PILGRIM';
-  status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'DELETED';
+  language: string | null;
   is_deleted: boolean;
   is_blocked: boolean;
   last_login_at: Date | null;
@@ -57,15 +56,15 @@ export class UsersAuthDao {
     username: string | null = null,
     passwordHash: string | null = null,
     trx?: Knex.Transaction,
+    language: string | null = null,
   ): Promise<UserRecord> {
     const [record] = await this.qb(trx)
       .insert({
         id: randomUUID(),
-        phone,
         username,
         password_hash: passwordHash,
         type,
-        status: 'ACTIVE',
+        language,
         is_blocked: false,
         last_login_at: null,
       })
