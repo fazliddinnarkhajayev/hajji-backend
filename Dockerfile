@@ -18,15 +18,19 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install production dependencies only
+# Install ALL deps (ts-node needed to run TS migrations at startup)
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Copy compiled output from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy production knexfile and entrypoint
-COPY knexfile.production.js ./knexfile.production.js
+# Copy migration TS source files so ts-node can run them
+COPY src/core/database/migrations ./src/core/database/migrations
+
+# Copy knexfile, tsconfig, and entrypoint
+COPY knexfile.js ./knexfile.js
+COPY tsconfig.json ./tsconfig.json
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x entrypoint.sh
 
