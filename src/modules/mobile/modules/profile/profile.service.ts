@@ -111,6 +111,7 @@ export class ProfileService {
       email: pilgrim.email || null,
       avatar_url: pilgrim.avatar_url || null,
       language: pilgrim.language || 'uz',
+      is_guide: pilgrim.is_guide || false,
       user_id: pilgrim.user_id,
       status: pilgrim.status,
       notifications_enabled: pilgrim.notifications_enabled ?? true,
@@ -124,6 +125,7 @@ export class ProfileService {
       region: pilgrim.region,
       district: pilgrim.district,
       agency: pilgrim.agency,
+      group_id: pilgrim.group_id ?? null,
     };
   }
 

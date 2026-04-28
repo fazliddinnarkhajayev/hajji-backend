@@ -51,6 +51,7 @@ export interface Pilgrim {
     id?: string;
     name?: string;
   } | null;
+  group_id?: string | null;
 }
 
 @Injectable()
@@ -112,12 +113,14 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.REGIONS, `${TABLE_NAMES.PILGRIMS}.region_id`, `${TABLE_NAMES.REGIONS}.id`)
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .leftJoin(TABLE_NAMES.GROUP_MEMBERS, `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`, `${TABLE_NAMES.PILGRIMS}.id`)
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.COUNTRIES}.id, 'name', ${TABLE_NAMES.COUNTRIES}.name, 'soato', ${TABLE_NAMES.COUNTRIES}.soato) as country`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.REGIONS}.id, 'name', ${TABLE_NAMES.REGIONS}.name, 'soato', ${TABLE_NAMES.REGIONS}.soato) as region`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+        `${TABLE_NAMES.GROUP_MEMBERS}.group_id`,
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.user_id`]: userId, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })
       .first();
@@ -131,12 +134,14 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.REGIONS, `${TABLE_NAMES.PILGRIMS}.region_id`, `${TABLE_NAMES.REGIONS}.id`)
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .leftJoin(TABLE_NAMES.GROUP_MEMBERS, `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`, `${TABLE_NAMES.PILGRIMS}.id`)
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.COUNTRIES}.id, 'name', ${TABLE_NAMES.COUNTRIES}.name, 'soato', ${TABLE_NAMES.COUNTRIES}.soato) as country`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.REGIONS}.id, 'name', ${TABLE_NAMES.REGIONS}.name, 'soato', ${TABLE_NAMES.REGIONS}.soato) as region`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+        `${TABLE_NAMES.GROUP_MEMBERS}.group_id`,
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.id`]: id, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })
       .first();
