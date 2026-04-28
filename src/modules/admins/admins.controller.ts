@@ -29,6 +29,7 @@ export class AdminsController {
     return this.adminsService.findOne(id);
   }
 
+  @IsPublic()
   @Post()
   create(@Body() dto: CreateAdminDto) {
     return this.adminsService.create(dto);

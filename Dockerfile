@@ -1,0 +1,35 @@
+# ============================================================
+# Stage 1 — Builder: compile TypeScript
+# ============================================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# ============================================================
+# Stage 2 — Production: lean runtime image
+# ============================================================
+FROM node:20-alpine AS production
+
+WORKDIR /app
+
+# Install production dependencies only
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy compiled output from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Copy production knexfile and entrypoint
+COPY knexfile.production.js ./knexfile.production.js
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
+
+EXPOSE 3000
+
+ENTRYPOINT ["./entrypoint.sh"]
