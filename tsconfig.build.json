@@ -4,6 +4,9 @@
     "node_modules",
     "dist",
     "test",
-    "**/*spec.ts"
+    "**/*spec.ts",
+    "knexfile.js",
+    "knexfile.production.js",
+    "WEBSOCKET_CLIENT_EXAMPLE.js"
   ]
 }

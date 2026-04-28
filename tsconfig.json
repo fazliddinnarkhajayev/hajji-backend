@@ -9,6 +9,7 @@
     "resolveJsonModule": true,
     "target": "ES2022",
     "outDir": "./dist",
+    "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
     "esModuleInterop": true,
