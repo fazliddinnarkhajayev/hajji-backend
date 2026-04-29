@@ -4,10 +4,11 @@ import { PilgrimsController } from './pilgrims.controller';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import { PilgrimAgencyHistoryDao } from 'src/shared/dao/pilgrim-agency-history.dao';
 import { UsersModule } from 'src/modules/users/users.module';
+import { SundryService } from 'src/shared/services/sundry.service';
 
 @Module({
   imports: [UsersModule],
-  providers: [PilgrimsService, PilgrimsDao, PilgrimAgencyHistoryDao],
+  providers: [PilgrimsService, PilgrimsDao, PilgrimAgencyHistoryDao, SundryService],
   controllers: [PilgrimsController],
 })
 export class PilgrimsModule {}

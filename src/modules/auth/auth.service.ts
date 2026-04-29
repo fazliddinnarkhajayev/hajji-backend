@@ -30,6 +30,7 @@ import { UserTypesEnum } from "src/shared/enums/user-types.enum";
 import { CountriesDao } from "../references/modules/countries/countries.dao";
 import { RegionsDao } from "../references/modules/regions/regions.dao";
 import { DistrictsDao } from "../references/modules/districts/districts.dao";
+import { SundryService } from "../../shared/services/sundry.service";
 import { randomUUID } from "crypto";
 
 export interface JwtPayload {
@@ -61,11 +62,8 @@ export class AuthService {
     private readonly countriesDao: CountriesDao,
     private readonly regionsDao: RegionsDao,
     private readonly districtsDao: DistrictsDao,
+    private readonly sundryService: SundryService,
   ) { }
-
-  private normalizePhone(phone: string): string {
-    return phone.replace(/\D/g, "");
-  }
 
   // ===================== Admin Login =====================
 
@@ -180,7 +178,7 @@ export class AuthService {
   async sendOtp(
     dto: SendOtpDto,
   ): Promise<{ success: boolean; expires_in_minutes: number }> {
-    const phone = this.normalizePhone(dto.phone);
+    const phone = this.sundryService.normalizePhone(dto.phone);
 
     // Validate user exists, is a PILGRIM, and has a pilgrim profile
     const user = await this.usersAuthDao.findUserBy({ username: phone });
@@ -231,7 +229,7 @@ export class AuthService {
     refresh_token: string;
     is_new_user: boolean;
   }> {
-    const phone = this.normalizePhone(dto.phone);
+    const phone = this.sundryService.normalizePhone(dto.phone);
 
     return this.db.transaction(async (trx) => {
       // TEST BYPASS: Allow test code "123456" to skip OTP verification
@@ -339,7 +337,7 @@ export class AuthService {
       );
     }
 
-    const phone = this.normalizePhone(dto.phone);
+    const phone = this.sundryService.normalizePhone(dto.phone);
 
     return this.db.transaction(async (trx) => {
       // Check if user with this phone already exists
