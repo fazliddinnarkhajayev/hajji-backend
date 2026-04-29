@@ -30,7 +30,7 @@ export class AdminsService extends BaseService<any, AdminsDao> {
       const user = await this.usersService.create(userData, t);
 
       const adminUser: any = {
-        phone: dto.phone,
+        phone: this.sundryService.normalizePhone(dto.phone),
         role: dto.role,
         first_name: dto.first_name,
         last_name: dto.last_name,

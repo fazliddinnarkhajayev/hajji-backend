@@ -41,7 +41,7 @@ export class AgencyUsersService extends BaseService<AgencyUser, AgencyUsersDao> 
           first_name: dto.first_name,
           last_name: dto.last_name,
           middle_name: dto.middle_name,
-          phone: dto.phone,
+          phone: this.sundryService.normalizePhone(dto.phone),
           role: dto.role,
         } as Partial<AgencyUser>,
         t,

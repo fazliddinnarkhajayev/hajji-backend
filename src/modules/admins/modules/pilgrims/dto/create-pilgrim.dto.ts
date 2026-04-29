@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsPhoneNumber, IsEmail, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsPhoneNumber, IsEmail, IsUUID, IsNotEmpty } from 'class-validator';
 
 export class CreatePilgrimDto {
   @IsString()
@@ -12,9 +12,9 @@ export class CreatePilgrimDto {
   @IsString()
   middle_name?: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsPhoneNumber()
-  phone?: string;
+  phone: string;
 
   @IsOptional()
   @IsEmail()

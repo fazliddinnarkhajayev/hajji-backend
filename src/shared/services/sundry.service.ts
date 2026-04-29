@@ -12,4 +12,8 @@ export class SundryService {
   compareHashPassword(password: string, hash: string): boolean {
     return bcrypt.compareSync(password, hash);
   }
+
+  normalizePhone(phone: string): string {
+    return phone.replace(/\D/g, "");
+  }
 }

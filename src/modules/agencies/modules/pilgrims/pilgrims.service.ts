@@ -3,12 +3,14 @@ import { BaseService } from 'src/shared/services/base.service';
 import { PilgrimsDao, Pilgrim } from 'src/shared/dao/piligrims.dao';
 import { AgencyUsersDao } from 'src/modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
 import { JwtPayload } from 'src/shared/guards/jwt-auth.guard';
+import { SundryService } from 'src/shared/services/sundry.service';
 
 @Injectable()
 export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   constructor(
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly agencyUsersDao: AgencyUsersDao,
+    private readonly sundryService: SundryService,
   ) {
     super(pilgrimsDao);
   }
@@ -28,7 +30,8 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
 
     // Apply phone filter if provided (using ILIKE for case-insensitive partial matching)
     if (phone) {
-      return await this.pilgrimsDao.findManyPaginatedWithPhone(where, phone, pageIndex, pageSize);
+      const normalizedPhone = this.sundryService.normalizePhone(phone);
+      return await this.pilgrimsDao.findManyPaginatedWithPhone(where, normalizedPhone, pageIndex, pageSize);
     }
 
     // Fetch all pilgrims without phone filter

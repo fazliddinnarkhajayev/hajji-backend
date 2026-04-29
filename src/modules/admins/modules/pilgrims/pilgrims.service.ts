@@ -8,6 +8,7 @@ import { Pilgrim, PilgrimsDao } from "src/shared/dao/piligrims.dao";
 import { PilgrimAgencyHistoryDao } from "src/shared/dao/pilgrim-agency-history.dao";
 import { CreatePilgrimDto } from "./dto/create-pilgrim.dto";
 import { PaginatedResult } from "src/shared/interfaces/pagination.interface";
+import { SundryService } from "src/shared/services/sundry.service";
 
 @Injectable()
 export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
@@ -15,15 +16,17 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly historyDao: PilgrimAgencyHistoryDao,
     private readonly usersService: UsersService,
+    private readonly sundryService: SundryService,
   ) {
     super(pilgrimsDao);
   }
 
   async create(dto: CreatePilgrimDto, user: any): Promise<Pilgrim> {
     const run = async (t: Knex.Transaction) => {
+      const phone = this.sundryService.normalizePhone(dto.phone);
       const new_user = await this.usersService.create(
         {
-          username: dto.phone,
+          username: phone,
           type: UserTypesEnum.PILGRIM,
           created_by_id: user.created_by_id,
         } as any,
@@ -35,7 +38,7 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
           first_name: dto.first_name,
           last_name: dto.last_name,
           middle_name: dto.middle_name,
-          phone: dto.phone,
+          phone: phone,
           email: dto.email,
           country_id: dto.country_id,
           region_id: dto.region_id,
