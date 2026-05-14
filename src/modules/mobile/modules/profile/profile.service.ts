@@ -101,9 +101,10 @@ export class ProfileService {
   }
 
   private mapPilgrimToUserProfile(pilgrim: Pilgrim): UserProfile {
+    const fullName = [pilgrim.first_name, pilgrim.middle_name, pilgrim.last_name].filter(Boolean).join(' ');
     return {
       id: pilgrim.id,
-      full_name: pilgrim.full_name || '',
+      full_name: fullName || '',
       first_name: pilgrim.first_name || null,
       last_name: pilgrim.last_name || null,
       middle_name: pilgrim.middle_name || null,
@@ -131,7 +132,6 @@ export class ProfileService {
 
   private mapUserProfileToPilgrim(userProfile: Partial<UserProfile>): Partial<Pilgrim> {
     return {
-      full_name: userProfile.full_name,
       first_name: userProfile.first_name,
       last_name: userProfile.last_name,
       middle_name: userProfile.middle_name,

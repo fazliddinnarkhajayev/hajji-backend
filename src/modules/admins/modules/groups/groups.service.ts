@@ -5,6 +5,7 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
 import { WebSocketService } from 'src/modules/websocket/websocket.service';
 import { AgencyUsersDao } from 'src/modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
+import { RoomGroupsDao, RoomGroupWithMembers } from 'src/shared/dao/room-groups.dao';
 
 @Injectable()
 export class GroupsService {
@@ -12,6 +13,7 @@ export class GroupsService {
     private readonly groupsDao: GroupsDao,
     private readonly webSocketService: WebSocketService,
     private readonly agencyUsersDao: AgencyUsersDao,
+    private readonly roomGroupsDao: RoomGroupsDao,
   ) {}
 
   async create(dto: CreateGroupDto, userId?: string): Promise<Group> {
@@ -111,6 +113,12 @@ export class GroupsService {
       deleted_at: new Date(),
       deleted_by_id: userId,
     } as Partial<Group>);
+  }
+
+  async getRoomGroups(groupId: string): Promise<RoomGroupWithMembers[]> {
+    const group = await this.groupsDao.findByIdWithJoins(groupId);
+    if (!group) throw new NotFoundException('Group not found');
+    return this.roomGroupsDao.findByGroupId(groupId);
   }
 
   async changeStatus(

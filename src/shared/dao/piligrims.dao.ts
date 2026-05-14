@@ -6,10 +6,10 @@ import { BaseDao } from './base.dao';
 
 export interface Pilgrim {
   id: string;
-  full_name: string;
-  first_name?: string | null;
+  first_name: string;
   last_name?: string | null;
   middle_name?: string | null;
+  full_name?: string;
   phone?: string | null;
   email?: string | null;
   avatar_url?: string | null;

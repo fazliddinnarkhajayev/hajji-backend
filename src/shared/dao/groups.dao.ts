@@ -44,7 +44,7 @@ export class GroupsDao extends BaseDao<Group> {
       .select(
         `${TABLE_NAMES.GROUPS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
-        this.db.raw(`json_build_object('id', ${TABLE_NAMES.PILGRIMS}.id, 'full_name', ${TABLE_NAMES.PILGRIMS}.full_name) as guide`),
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.PILGRIMS}.id, 'full_name', concat_ws(' ', ${TABLE_NAMES.PILGRIMS}.first_name, ${TABLE_NAMES.PILGRIMS}.middle_name, ${TABLE_NAMES.PILGRIMS}.last_name)) as guide`),
       )
       .where({ [`${TABLE_NAMES.GROUPS}.id`]: id, [`${TABLE_NAMES.GROUPS}.is_deleted`]: false })
       .whereNull(`${TABLE_NAMES.GROUPS}.deleted_at`)

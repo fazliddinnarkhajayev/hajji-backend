@@ -39,6 +39,11 @@ export class GroupsController {
     return this.groupsService.findByAgency(agencyId, pagination.page_index, pagination.page_size);
   }
 
+  @Get(':groupId/room-groups')
+  async getRoomGroups(@Param('groupId') groupId: string) {
+    return this.groupsService.getRoomGroups(groupId);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.groupsService.findOne(id);

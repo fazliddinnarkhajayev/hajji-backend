@@ -6,7 +6,9 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import { GroupMembersDao } from 'src/shared/dao/group-members.dao';
 import { UsersAuthDao } from 'src/shared/dao/users-auth.dao';
+import { RoomGroupsDao, RoomGroupWithMembers } from 'src/shared/dao/room-groups.dao';
 import { KNEX_CONNECTION } from 'src/core/database/database.constants';
+import { TABLE_NAMES } from 'src/shared/constants';
 import { Knex } from 'knex';
 
 @Injectable()
@@ -16,13 +18,11 @@ export class GroupsService {
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly groupMembersDao: GroupMembersDao,
     private readonly usersAuthDao: UsersAuthDao,
+    private readonly roomGroupsDao: RoomGroupsDao,
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
   ) {}
 
-  async create(
-    agencyId: string,
-    createGroupDto: CreateGroupDto,
-  ): Promise<Group> {
+  async create(agencyId: string, createGroupDto: CreateGroupDto): Promise<Group> {
     return this.groupsDao.insert({
       ...createGroupDto,
       agency_id: agencyId,
@@ -32,224 +32,193 @@ export class GroupsService {
     } as Partial<Group>);
   }
 
-  async findByAgency(
-    agencyId: string,
-    pageIndex: number = 1,
-    pageSize: number = 10,
-  ): Promise<PaginatedResult<Group>> {
-    return this.groupsDao.findManyPaginatedWithJoins(
-      { agency_id: agencyId } as Partial<Group>,
-      pageIndex,
-      pageSize,
-    );
+  async findByAgency(agencyId: string, pageIndex = 1, pageSize = 10): Promise<PaginatedResult<Group>> {
+    return this.groupsDao.findManyPaginatedWithJoins({ agency_id: agencyId } as Partial<Group>, pageIndex, pageSize);
   }
 
   async findOne(id: string, agencyId: string): Promise<Group> {
     const group = await this.groupsDao.findByIdWithJoins(id);
-    if (!group) {
-      throw new NotFoundException('Group not found');
-    }
-    if (group.agency_id !== agencyId) {
-      throw new NotFoundException('Group not found for this agency');
-    }
+    if (!group) throw new NotFoundException('Group not found');
+    if (group.agency_id !== agencyId) throw new NotFoundException('Group not found for this agency');
     return group;
   }
 
-  async update(
-    id: string,
-    agencyId: string,
-    updateGroupDto: UpdateGroupDto,
-  ): Promise<Group | undefined> {
-    const group = await this.findOne(id, agencyId);
+  async update(id: string, agencyId: string, updateGroupDto: UpdateGroupDto): Promise<Group | undefined> {
+    await this.findOne(id, agencyId);
     return this.groupsDao.updateById(id, updateGroupDto);
   }
 
-  /**
-   * Add a pilgrim to a group
-   * Validation:
-   * 1. Group must exist and belong to the agency
-   * 2. Pilgrim must exist and not be deleted
-   * 3. Pilgrim must be of type PILGRIM
-   * 4. Pilgrim cannot already be in another group
-   * 5. Group and pilgrim must belong to the same agency
-   */
+  async remove(id: string, agencyId: string): Promise<{ success: boolean }> {
+    await this.findOne(id, agencyId);
+    await this.groupsDao.deleteById(id);
+    return { success: true };
+  }
+
+  // ── Group Members ──────────────────────────────────────────
+
   async addPilgrimToGroup(groupId: string, agencyId: string, pilgrimId: string): Promise<any> {
     return this.db.transaction(async (trx) => {
-      // 1. Check if group exists and belongs to the agency
       const group = await this.groupsDao.findById(groupId, trx);
-      if (!group) {
-        throw new NotFoundException(`Group with ID ${groupId} not found`);
-      }
-      if (group.agency_id !== agencyId) {
-        throw new NotFoundException('Group not found for this agency');
-      }
+      if (!group) throw new NotFoundException(`Group with ID ${groupId} not found`);
+      if (group.agency_id !== agencyId) throw new NotFoundException('Group not found for this agency');
 
-      // 2. Check if pilgrim exists
       const pilgrim = await this.pilgrimsDao.findById(pilgrimId, trx);
-      if (!pilgrim) {
-        throw new NotFoundException(`Pilgrim with ID ${pilgrimId} not found`);
-      }
+      if (!pilgrim) throw new NotFoundException(`Pilgrim with ID ${pilgrimId} not found`);
 
-      // 3. Check if pilgrim is of type PILGRIM
       const user = await this.usersAuthDao.findUserById(pilgrim.user_id, trx);
-      if (!user) {
-        throw new NotFoundException(`User associated with pilgrim not found`);
-      }
-      if (user.type !== 'PILGRIM') {
-        throw new BadRequestException('User must be of type PILGRIM to be added to a group');
-      }
+      if (!user) throw new NotFoundException(`User associated with pilgrim not found`);
+      if (user.type !== 'PILGRIM') throw new BadRequestException('User must be of type PILGRIM to be added to a group');
 
-      // 4. Check if pilgrim is already in another group
       const existingMembership = await this.groupMembersDao.findByPilgrimId(pilgrimId, trx);
-      if (existingMembership) {
-        throw new BadRequestException('Pilgrim is already assigned to another group');
-      }
+      if (existingMembership) throw new BadRequestException('Pilgrim is already assigned to another group');
 
-      // 5. Verify pilgrim belongs to the same agency as the group
       if (pilgrim.agency_id !== group.agency_id) {
-        throw new BadRequestException(
-          'Pilgrim must belong to the same agency as the group to be added',
-        );
+        throw new BadRequestException('Pilgrim must belong to the same agency as the group to be added');
       }
 
-      // Add pilgrim to group
-      const groupMember = await this.groupMembersDao.addPilgrimToGroup(
-        groupId,
-        pilgrimId,
-        trx,
-      );
+      const groupMember = await this.groupMembersDao.addPilgrimToGroup(groupId, pilgrimId, trx);
 
+      const fullName = [pilgrim.first_name, pilgrim.middle_name, pilgrim.last_name].filter(Boolean).join(' ');
       return {
         message: 'Pilgrim successfully added to group',
         data: {
           id: groupMember.id,
           group_id: groupMember.group_id,
           pilgrim_id: groupMember.pilgrim_id,
-          pilgrim_name: pilgrim.full_name,
+          pilgrim_name: fullName || 'Unknown',
           joined_at: groupMember.joined_at,
         },
       };
     });
   }
 
-  /**
-   * Remove a pilgrim from their group
-   */
   async removePilgrimFromGroup(groupId: string, agencyId: string, pilgrimId: string): Promise<any> {
     return this.db.transaction(async (trx) => {
-      // Check if group exists and belongs to the agency
       const group = await this.groupsDao.findById(groupId, trx);
-      if (!group) {
-        throw new NotFoundException(`Group with ID ${groupId} not found`);
-      }
-      if (group.agency_id !== agencyId) {
-        throw new NotFoundException('Group not found for this agency');
-      }
+      if (!group) throw new NotFoundException(`Group with ID ${groupId} not found`);
+      if (group.agency_id !== agencyId) throw new NotFoundException('Group not found for this agency');
 
-      // Check if pilgrim exists
       const pilgrim = await this.pilgrimsDao.findById(pilgrimId, trx);
-      if (!pilgrim) {
-        throw new NotFoundException(`Pilgrim with ID ${pilgrimId} not found`);
-      }
+      if (!pilgrim) throw new NotFoundException(`Pilgrim with ID ${pilgrimId} not found`);
 
-      // Check if pilgrim is in this group
       const membership = await this.groupMembersDao.findByPilgrimId(pilgrimId, trx);
-      if (!membership) {
-        throw new BadRequestException('Pilgrim is not assigned to any group');
-      }
-      if (membership.group_id !== groupId) {
-        throw new BadRequestException('Pilgrim is not a member of this group');
-      }
+      if (!membership) throw new BadRequestException('Pilgrim is not assigned to any group');
+      if (membership.group_id !== groupId) throw new BadRequestException('Pilgrim is not a member of this group');
 
-      // Remove pilgrim from group
       const removed = await this.groupMembersDao.removePilgrimFromGroup(pilgrimId, trx);
+      if (!removed) throw new BadRequestException('Failed to remove pilgrim from group');
 
-      if (!removed) {
-        throw new BadRequestException('Failed to remove pilgrim from group');
-      }
-
+      const fullName = [pilgrim.first_name, pilgrim.middle_name, pilgrim.last_name].filter(Boolean).join(' ');
       return {
         message: 'Pilgrim successfully removed from group',
-        data: {
-          pilgrim_id: pilgrimId,
-          pilgrim_name: pilgrim.full_name,
-        },
+        data: { pilgrim_id: pilgrimId, pilgrim_name: fullName || 'Unknown' },
       };
     });
   }
 
-  /**
-   * Get all pilgrims in a group
-   */
   async getPilgrimsInGroup(groupId: string, agencyId: string): Promise<any> {
-    // Check if group exists and belongs to the agency
     const group = await this.groupsDao.findById(groupId);
-    if (!group) {
-      throw new NotFoundException(`Group with ID ${groupId} not found`);
-    }
-    if (group.agency_id !== agencyId) {
-      throw new NotFoundException('Group not found for this agency');
-    }
+    if (!group) throw new NotFoundException(`Group with ID ${groupId} not found`);
+    if (group.agency_id !== agencyId) throw new NotFoundException('Group not found for this agency');
 
-    // Get all members in the group
     const members = await this.groupMembersDao.getGroupMembersWithDetails(groupId);
 
-    // Fetch pilgrim details for each member
-    const membersWithDetails = await Promise.all(
+    return Promise.all(
       members.map(async (member: any) => {
         const pilgrim = await this.pilgrimsDao.findById(member.pilgrim_id);
+        const fullName = pilgrim ? [pilgrim.first_name, pilgrim.middle_name, pilgrim.last_name].filter(Boolean).join(' ') : 'Unknown';
         return {
           id: member.id,
           group_id: member.group_id,
           pilgrim_id: member.pilgrim_id,
-          full_name: pilgrim?.full_name || 'Unknown',
+          full_name: fullName,
           phone: pilgrim?.phone || null,
           email: pilgrim?.email || null,
           agency_id: pilgrim?.agency_id || null,
           joined_at: member.joined_at,
           created_at: member.created_at,
-          agency: pilgrim?.agency || null,
         };
-      })
+      }),
     );
-
-    return membersWithDetails;
   }
 
-  /**
-   * Get group information for a specific pilgrim
-   */
-  async getPilgrimGroup(pilgrimId: string): Promise<any> {
-    // Check if pilgrim exists
-    const pilgrim = await this.pilgrimsDao.findById(pilgrimId);
-    if (!pilgrim) {
-      throw new NotFoundException(`Pilgrim with ID ${pilgrimId} not found`);
+  // ── Room Groups ────────────────────────────────────────────
+
+  private async verifyGroupOwnership(groupId: string, agencyId: string): Promise<void> {
+    const group = await this.groupsDao.findById(groupId);
+    if (!group) throw new NotFoundException('Group not found');
+    if (group.agency_id !== agencyId) throw new NotFoundException('Group not found for this agency');
+  }
+
+  async getRoomGroups(groupId: string, agencyId: string): Promise<RoomGroupWithMembers[]> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    return this.roomGroupsDao.findByGroupId(groupId);
+  }
+
+  async createRoomGroup(groupId: string, agencyId: string, name: string, userId?: string): Promise<any> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    return this.roomGroupsDao.create(groupId, name, userId);
+  }
+
+  async updateRoomGroup(groupId: string, roomGroupId: string, agencyId: string, name: string): Promise<any> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
+    if (!roomGroup) throw new NotFoundException('Room group not found');
+    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
+    return this.roomGroupsDao.updateName(roomGroupId, name);
+  }
+
+  async deleteRoomGroup(groupId: string, roomGroupId: string, agencyId: string): Promise<{ success: boolean }> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
+    if (!roomGroup) throw new NotFoundException('Room group not found');
+    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
+    await this.roomGroupsDao.delete(roomGroupId);
+    return { success: true };
+  }
+
+  async addRoomGroupMember(
+    groupId: string,
+    roomGroupId: string,
+    agencyId: string,
+    pilgrimId: string,
+  ): Promise<{ success: boolean }> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+
+    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
+    if (!roomGroup) throw new NotFoundException('Room group not found');
+    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
+
+    const membership = await this.db(TABLE_NAMES.GROUP_MEMBERS)
+      .where({ group_id: groupId, pilgrim_id: pilgrimId })
+      .first();
+    if (!membership) throw new BadRequestException('Pilgrim is not a member of this group');
+
+    const existingRoomMembership = await this.roomGroupsDao.findMemberByPilgrimId(pilgrimId);
+    if (existingRoomMembership) throw new BadRequestException('Pilgrim is already assigned to a room group');
+
+    await this.roomGroupsDao.addMember(roomGroupId, pilgrimId);
+    return { success: true };
+  }
+
+  async removeRoomGroupMember(
+    groupId: string,
+    roomGroupId: string,
+    agencyId: string,
+    pilgrimId: string,
+  ): Promise<{ success: boolean }> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+
+    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
+    if (!roomGroup) throw new NotFoundException('Room group not found');
+    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
+
+    const existingRoomMembership = await this.roomGroupsDao.findMemberByPilgrimId(pilgrimId);
+    if (!existingRoomMembership || existingRoomMembership.room_group_id !== roomGroupId) {
+      throw new BadRequestException('Pilgrim is not in this room group');
     }
 
-    // Find pilgrim's group
-    const membership = await this.groupMembersDao.findByPilgrimId(pilgrimId);
-    if (!membership) {
-      return {
-        pilgrim_id: pilgrimId,
-        pilgrim_name: pilgrim.full_name,
-        group: null,
-        message: 'Pilgrim is not assigned to any group',
-      };
-    }
-
-    // Get group details
-    const group = await this.groupsDao.findById(membership.group_id);
-
-    return {
-      pilgrim_id: pilgrimId,
-      pilgrim_name: pilgrim.full_name,
-      group: {
-        id: group?.id,
-        name: group?.name,
-        status: group?.status,
-        departure_date: group?.departure_date,
-        return_date: group?.return_date,
-      },
-    };
+    await this.roomGroupsDao.removeMember(pilgrimId);
+    return { success: true };
   }
 }

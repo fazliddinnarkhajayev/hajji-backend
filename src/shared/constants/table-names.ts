@@ -15,4 +15,6 @@ export const TABLE_NAMES = {
   INVITATIONS: 'invitations',
   GROUPS: 'groups',
   GROUP_MEMBERS: 'group_members',
+  ROOM_GROUPS: 'room_groups',
+  ROOM_GROUP_MEMBERS: 'room_group_members',
 } as const;
