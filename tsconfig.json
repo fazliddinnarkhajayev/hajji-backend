@@ -11,12 +11,12 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": "./",
-    "incremental": true,
-    "esModuleInterop": true,
-    "sourceMap": true,
     "allowJs": true,
     "lib": [
       "ES2022"
     ]
-  }
+  },
+  "include": [
+    "src/**/*"
+  ]
 }
