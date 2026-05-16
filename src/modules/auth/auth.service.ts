@@ -530,7 +530,7 @@ export class AuthService {
               this.configService.get<string>("ACCESS_TOKEN_SECRET") ??
               "change_me_access",
             expiresIn:
-              this.configService.get<number>("ACCESS_TOKEN_EXPIRES_IN") ?? 900, // 15m in seconds
+              parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") ?? "900", 10),
           },
         );
 
@@ -585,7 +585,7 @@ export class AuthService {
         this.configService.get<string>("ACCESS_TOKEN_SECRET") ??
         "change_me_access",
       expiresIn:
-        this.configService.get<number>("ACCESS_TOKEN_EXPIRES_IN") ?? 900, // 15m in seconds
+        parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") ?? "900", 10),
     });
 
     // Generate refresh token
@@ -594,7 +594,7 @@ export class AuthService {
         this.configService.get<string>("REFRESH_TOKEN_SECRET") ??
         "change_me_refresh",
       expiresIn:
-        this.configService.get<number>("REFRESH_TOKEN_EXPIRES_IN") ?? 604800, // 7d in seconds
+        parseInt(this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN") ?? "604800", 10),
     });
 
     // Store refresh token in database

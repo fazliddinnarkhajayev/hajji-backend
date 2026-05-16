@@ -7,6 +7,7 @@ import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import { GroupMembersDao } from 'src/shared/dao/group-members.dao';
 import { UsersAuthDao } from 'src/shared/dao/users-auth.dao';
 import { RoomRequestsDao, RoomRequestWithMembers } from 'src/shared/dao/room-requests.dao';
+import { RoomsDao, RoomInput, RoomWithMembers } from 'src/shared/dao/rooms.dao';
 import { KNEX_CONNECTION } from 'src/core/database/database.constants';
 import { TABLE_NAMES } from 'src/shared/constants';
 import { Knex } from 'knex';
@@ -19,6 +20,7 @@ export class GroupsService {
     private readonly groupMembersDao: GroupMembersDao,
     private readonly usersAuthDao: UsersAuthDao,
     private readonly roomRequestsDao: RoomRequestsDao,
+    private readonly roomsDao: RoomsDao,
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
   ) {}
 
@@ -219,6 +221,72 @@ export class GroupsService {
     }
 
     await this.roomRequestsDao.removeMember(pilgrimId);
+    return { success: true };
+  }
+
+  // ── Rooms ──────────────────────────────────────────────────
+
+  async getRooms(groupId: string, agencyId: string): Promise<RoomWithMembers[]> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    return this.roomsDao.findByGroupId(groupId);
+  }
+
+  async createRooms(groupId: string, agencyId: string, rooms: RoomInput[], userId?: string): Promise<any> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    return this.roomsDao.createBulk(groupId, rooms, userId);
+  }
+
+  async deleteRoom(groupId: string, roomId: string, agencyId: string): Promise<{ success: boolean }> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    const room = await this.roomsDao.findById(roomId);
+    if (!room) throw new NotFoundException('Room not found');
+    if (room.group_id !== groupId) throw new NotFoundException('Room does not belong to this group');
+    await this.roomsDao.delete(roomId);
+    return { success: true };
+  }
+
+  async addRoomMember(groupId: string, roomId: string, agencyId: string, pilgrimId: string): Promise<{ success: boolean }> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+
+    try {
+      await this.db.transaction(async (trx) => {
+        const room = await this.roomsDao.findById(roomId, trx);
+        if (!room) throw new NotFoundException('Room not found');
+        if (room.group_id !== groupId) throw new NotFoundException('Room does not belong to this group');
+
+        const membership = await trx(TABLE_NAMES.GROUP_MEMBERS)
+          .where({ group_id: groupId, pilgrim_id: pilgrimId })
+          .first();
+        if (!membership) throw new BadRequestException('Pilgrim is not a member of this group');
+
+        const currentCount = await this.roomsDao.countMembers(roomId, trx);
+        if (currentCount >= room.capacity) throw new BadRequestException('Room is at full capacity');
+
+        const existing = await this.roomsDao.findMemberByPilgrimId(pilgrimId, trx);
+        if (existing) throw new BadRequestException('Pilgrim is already assigned to a room');
+
+        await this.roomsDao.addMember(roomId, pilgrimId, trx);
+      });
+    } catch (err: any) {
+      // Unique constraint violation from DB (race condition fallback)
+      if (err?.code === '23505') throw new BadRequestException('Pilgrim is already assigned to a room');
+      throw err;
+    }
+
+    return { success: true };
+  }
+
+  async removeRoomMember(groupId: string, roomId: string, agencyId: string, pilgrimId: string): Promise<{ success: boolean }> {
+    await this.verifyGroupOwnership(groupId, agencyId);
+
+    const room = await this.roomsDao.findById(roomId);
+    if (!room) throw new NotFoundException('Room not found');
+    if (room.group_id !== groupId) throw new NotFoundException('Room does not belong to this group');
+
+    const existing = await this.roomsDao.findMemberByPilgrimId(pilgrimId);
+    if (!existing || existing.room_id !== roomId) throw new BadRequestException('Pilgrim is not in this room');
+
+    await this.roomsDao.removeMember(pilgrimId);
     return { success: true };
   }
 }

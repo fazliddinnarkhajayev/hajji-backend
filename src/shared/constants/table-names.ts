@@ -17,5 +17,7 @@ export const TABLE_NAMES = {
   GROUP_MEMBERS: 'group_members',
   ROOM_REQUESTS: 'room_requests',
   ROOM_REQUEST_MEMBERS: 'room_request_members',
+  ROOMS: 'rooms',
+  ROOM_MEMBERS: 'room_members',
   DUAS: 'duas',
 } as const;
