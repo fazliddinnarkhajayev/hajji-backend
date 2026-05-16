@@ -4,9 +4,9 @@ import { CurrentUser } from 'src/shared/decorators';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddPilgrimToGroupDto } from './dto/add-pilgrim-to-group.dto';
-import { CreateRoomGroupDto } from './dto/create-room-group.dto';
-import { UpdateRoomGroupDto } from './dto/update-room-group.dto';
-import { AddRoomGroupMemberDto } from './dto/add-room-group-member.dto';
+import { CreateRoomRequestDto } from './dto/create-room-request.dto';
+import { UpdateRoomRequestDto } from './dto/update-room-request.dto';
+import { AddRoomRequestMemberDto } from './dto/add-room-request-member.dto';
 
 @Controller('agencies/groups')
 export class GroupsController {
@@ -48,57 +48,57 @@ export class GroupsController {
     return this.groupsService.removePilgrimFromGroup(groupId, user.agency_id, pilgrimId);
   }
 
-  @Get(':groupId/room-groups')
-  async getRoomGroups(@Param('groupId') groupId: string, @CurrentUser() user: any) {
-    return this.groupsService.getRoomGroups(groupId, user.agency_id);
+  @Get(':groupId/room-requests')
+  async getRoomRequests(@Param('groupId') groupId: string, @CurrentUser() user: any) {
+    return this.groupsService.getRoomRequests(groupId, user.agency_id);
   }
 
-  @Post(':groupId/room-groups')
-  async createRoomGroup(
+  @Post(':groupId/room-requests')
+  async createRoomRequest(
     @Param('groupId') groupId: string,
-    @Body() dto: CreateRoomGroupDto,
+    @Body() dto: CreateRoomRequestDto,
     @CurrentUser() user: any,
   ) {
-    return this.groupsService.createRoomGroup(groupId, user.agency_id, dto.name, user.id);
+    return this.groupsService.createRoomRequest(groupId, user.agency_id, dto.name, user.id);
   }
 
-  @Patch(':groupId/room-groups/:roomGroupId')
-  async updateRoomGroup(
+  @Patch(':groupId/room-requests/:roomRequestId')
+  async updateRoomRequest(
     @Param('groupId') groupId: string,
-    @Param('roomGroupId') roomGroupId: string,
-    @Body() dto: UpdateRoomGroupDto,
+    @Param('roomRequestId') roomRequestId: string,
+    @Body() dto: UpdateRoomRequestDto,
     @CurrentUser() user: any,
   ) {
-    return this.groupsService.updateRoomGroup(groupId, roomGroupId, user.agency_id, dto.name);
+    return this.groupsService.updateRoomRequest(groupId, roomRequestId, user.agency_id, dto.name);
   }
 
-  @Delete(':groupId/room-groups/:roomGroupId')
-  async deleteRoomGroup(
+  @Delete(':groupId/room-requests/:roomRequestId')
+  async deleteRoomRequest(
     @Param('groupId') groupId: string,
-    @Param('roomGroupId') roomGroupId: string,
+    @Param('roomRequestId') roomRequestId: string,
     @CurrentUser() user: any,
   ) {
-    return this.groupsService.deleteRoomGroup(groupId, roomGroupId, user.agency_id);
+    return this.groupsService.deleteRoomRequest(groupId, roomRequestId, user.agency_id);
   }
 
-  @Post(':groupId/room-groups/:roomGroupId/members')
-  async addRoomGroupMember(
+  @Post(':groupId/room-requests/:roomRequestId/members')
+  async addRoomRequestMember(
     @Param('groupId') groupId: string,
-    @Param('roomGroupId') roomGroupId: string,
-    @Body() dto: AddRoomGroupMemberDto,
+    @Param('roomRequestId') roomRequestId: string,
+    @Body() dto: AddRoomRequestMemberDto,
     @CurrentUser() user: any,
   ) {
-    return this.groupsService.addRoomGroupMember(groupId, roomGroupId, user.agency_id, dto.pilgrim_id);
+    return this.groupsService.addRoomRequestMember(groupId, roomRequestId, user.agency_id, dto.pilgrim_id);
   }
 
-  @Delete(':groupId/room-groups/:roomGroupId/members/:pilgrimId')
-  async removeRoomGroupMember(
+  @Delete(':groupId/room-requests/:roomRequestId/members/:pilgrimId')
+  async removeRoomRequestMember(
     @Param('groupId') groupId: string,
-    @Param('roomGroupId') roomGroupId: string,
+    @Param('roomRequestId') roomRequestId: string,
     @Param('pilgrimId') pilgrimId: string,
     @CurrentUser() user: any,
   ) {
-    return this.groupsService.removeRoomGroupMember(groupId, roomGroupId, user.agency_id, pilgrimId);
+    return this.groupsService.removeRoomRequestMember(groupId, roomRequestId, user.agency_id, pilgrimId);
   }
 
   // ── Single-param routes ────────────────────────────────────

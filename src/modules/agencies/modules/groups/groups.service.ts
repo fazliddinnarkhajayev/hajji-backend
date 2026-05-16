@@ -6,7 +6,7 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import { GroupMembersDao } from 'src/shared/dao/group-members.dao';
 import { UsersAuthDao } from 'src/shared/dao/users-auth.dao';
-import { RoomGroupsDao, RoomGroupWithMembers } from 'src/shared/dao/room-groups.dao';
+import { RoomRequestsDao, RoomRequestWithMembers } from 'src/shared/dao/room-requests.dao';
 import { KNEX_CONNECTION } from 'src/core/database/database.constants';
 import { TABLE_NAMES } from 'src/shared/constants';
 import { Knex } from 'knex';
@@ -18,7 +18,7 @@ export class GroupsService {
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly groupMembersDao: GroupMembersDao,
     private readonly usersAuthDao: UsersAuthDao,
-    private readonly roomGroupsDao: RoomGroupsDao,
+    private readonly roomRequestsDao: RoomRequestsDao,
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
   ) {}
 
@@ -142,7 +142,7 @@ export class GroupsService {
     );
   }
 
-  // ── Room Groups ────────────────────────────────────────────
+  // ── Room Requests ──────────────────────────────────────────
 
   private async verifyGroupOwnership(groupId: string, agencyId: string): Promise<void> {
     const group = await this.groupsDao.findById(groupId);
@@ -150,75 +150,75 @@ export class GroupsService {
     if (group.agency_id !== agencyId) throw new NotFoundException('Group not found for this agency');
   }
 
-  async getRoomGroups(groupId: string, agencyId: string): Promise<RoomGroupWithMembers[]> {
+  async getRoomRequests(groupId: string, agencyId: string): Promise<RoomRequestWithMembers[]> {
     await this.verifyGroupOwnership(groupId, agencyId);
-    return this.roomGroupsDao.findByGroupId(groupId);
+    return this.roomRequestsDao.findByGroupId(groupId);
   }
 
-  async createRoomGroup(groupId: string, agencyId: string, name: string, userId?: string): Promise<any> {
+  async createRoomRequest(groupId: string, agencyId: string, name: string, userId?: string): Promise<any> {
     await this.verifyGroupOwnership(groupId, agencyId);
-    return this.roomGroupsDao.create(groupId, name, userId);
+    return this.roomRequestsDao.create(groupId, name, userId);
   }
 
-  async updateRoomGroup(groupId: string, roomGroupId: string, agencyId: string, name: string): Promise<any> {
+  async updateRoomRequest(groupId: string, roomRequestId: string, agencyId: string, name: string): Promise<any> {
     await this.verifyGroupOwnership(groupId, agencyId);
-    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
-    if (!roomGroup) throw new NotFoundException('Room group not found');
-    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
-    return this.roomGroupsDao.updateName(roomGroupId, name);
+    const roomRequest = await this.roomRequestsDao.findById(roomRequestId);
+    if (!roomRequest) throw new NotFoundException('Room request not found');
+    if (roomRequest.group_id !== groupId) throw new NotFoundException('Room request does not belong to this group');
+    return this.roomRequestsDao.updateName(roomRequestId, name);
   }
 
-  async deleteRoomGroup(groupId: string, roomGroupId: string, agencyId: string): Promise<{ success: boolean }> {
+  async deleteRoomRequest(groupId: string, roomRequestId: string, agencyId: string): Promise<{ success: boolean }> {
     await this.verifyGroupOwnership(groupId, agencyId);
-    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
-    if (!roomGroup) throw new NotFoundException('Room group not found');
-    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
-    await this.roomGroupsDao.delete(roomGroupId);
+    const roomRequest = await this.roomRequestsDao.findById(roomRequestId);
+    if (!roomRequest) throw new NotFoundException('Room request not found');
+    if (roomRequest.group_id !== groupId) throw new NotFoundException('Room request does not belong to this group');
+    await this.roomRequestsDao.delete(roomRequestId);
     return { success: true };
   }
 
-  async addRoomGroupMember(
+  async addRoomRequestMember(
     groupId: string,
-    roomGroupId: string,
+    roomRequestId: string,
     agencyId: string,
     pilgrimId: string,
   ): Promise<{ success: boolean }> {
     await this.verifyGroupOwnership(groupId, agencyId);
 
-    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
-    if (!roomGroup) throw new NotFoundException('Room group not found');
-    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
+    const roomRequest = await this.roomRequestsDao.findById(roomRequestId);
+    if (!roomRequest) throw new NotFoundException('Room request not found');
+    if (roomRequest.group_id !== groupId) throw new NotFoundException('Room request does not belong to this group');
 
     const membership = await this.db(TABLE_NAMES.GROUP_MEMBERS)
       .where({ group_id: groupId, pilgrim_id: pilgrimId })
       .first();
     if (!membership) throw new BadRequestException('Pilgrim is not a member of this group');
 
-    const existingRoomMembership = await this.roomGroupsDao.findMemberByPilgrimId(pilgrimId);
-    if (existingRoomMembership) throw new BadRequestException('Pilgrim is already assigned to a room group');
+    const existingRoomMembership = await this.roomRequestsDao.findMemberByPilgrimId(pilgrimId);
+    if (existingRoomMembership) throw new BadRequestException('Pilgrim is already assigned to a room request');
 
-    await this.roomGroupsDao.addMember(roomGroupId, pilgrimId);
+    await this.roomRequestsDao.addMember(roomRequestId, pilgrimId);
     return { success: true };
   }
 
-  async removeRoomGroupMember(
+  async removeRoomRequestMember(
     groupId: string,
-    roomGroupId: string,
+    roomRequestId: string,
     agencyId: string,
     pilgrimId: string,
   ): Promise<{ success: boolean }> {
     await this.verifyGroupOwnership(groupId, agencyId);
 
-    const roomGroup = await this.roomGroupsDao.findById(roomGroupId);
-    if (!roomGroup) throw new NotFoundException('Room group not found');
-    if (roomGroup.group_id !== groupId) throw new NotFoundException('Room group does not belong to this group');
+    const roomRequest = await this.roomRequestsDao.findById(roomRequestId);
+    if (!roomRequest) throw new NotFoundException('Room request not found');
+    if (roomRequest.group_id !== groupId) throw new NotFoundException('Room request does not belong to this group');
 
-    const existingRoomMembership = await this.roomGroupsDao.findMemberByPilgrimId(pilgrimId);
-    if (!existingRoomMembership || existingRoomMembership.room_group_id !== roomGroupId) {
-      throw new BadRequestException('Pilgrim is not in this room group');
+    const existingRoomMembership = await this.roomRequestsDao.findMemberByPilgrimId(pilgrimId);
+    if (!existingRoomMembership || existingRoomMembership.room_request_id !== roomRequestId) {
+      throw new BadRequestException('Pilgrim is not in this room request');
     }
 
-    await this.roomGroupsDao.removeMember(pilgrimId);
+    await this.roomRequestsDao.removeMember(pilgrimId);
     return { success: true };
   }
 }

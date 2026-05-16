@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
-export class AddRoomGroupMemberDto {
+export class AddRoomRequestMemberDto {
   @IsUUID()
   pilgrim_id: string;
 }
