@@ -508,7 +508,7 @@ export class AuthService {
       try {
         const payload = this.jwtService.verify<any>(dto.refresh_token, {
           secret:
-            this.configService.get<string>("REFRESH_TOKEN_SECRET") ??
+            this.configService.get<string>("REFRESH_TOKEN_SECRET") ||
             "change_me_refresh",
         });
 
@@ -527,7 +527,7 @@ export class AuthService {
           } as any,
           {
             secret:
-              this.configService.get<string>("ACCESS_TOKEN_SECRET") ??
+              this.configService.get<string>("ACCESS_TOKEN_SECRET") ||
               "change_me_access",
             expiresIn:
               parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") ?? "900", 10),
@@ -580,21 +580,20 @@ export class AuthService {
     };
 
     // Generate access token
+    const accessSecret = this.configService.get<string>("ACCESS_TOKEN_SECRET") || "change_me_access";
+    const refreshSecret = this.configService.get<string>("REFRESH_TOKEN_SECRET") || "change_me_refresh";
+
     const accessToken = this.jwtService.sign(payload, {
-      secret:
-        this.configService.get<string>("ACCESS_TOKEN_SECRET") ??
-        "change_me_access",
+      secret: accessSecret,
       expiresIn:
-        parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") ?? "900", 10),
+        parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") || "900", 10),
     });
 
     // Generate refresh token
     const refreshToken = this.jwtService.sign(payload, {
-      secret:
-        this.configService.get<string>("REFRESH_TOKEN_SECRET") ??
-        "change_me_refresh",
+      secret: refreshSecret,
       expiresIn:
-        parseInt(this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN") ?? "604800", 10),
+        parseInt(this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN") || "604800", 10),
     });
 
     // Store refresh token in database
