@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +20,7 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  private readonly logger = new Logger(JwtAuthGuard.name);
 
   constructor(
     private readonly jwtService: JwtService,
@@ -30,21 +32,21 @@ export class JwtAuthGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check if route is marked as public
     const isPublicOnMethod = this.reflector.get<boolean>(IS_PUBLIC_KEY, context.getHandler());
     const isPublicOnClass = this.reflector.get<boolean>(IS_PUBLIC_KEY, context.getClass());
     const isPublic = isPublicOnMethod || isPublicOnClass;
-    
+
     if (isPublic) {
       return true;
     }
 
-    // Get request
     const request = context.switchToHttp().getRequest();
+    const method = request.method;
+    const url = request.url;
 
-    // Extract token from Authorization header
     const authHeader = request.headers.authorization;
     if (!authHeader || typeof authHeader !== 'string') {
+      this.logger.warn(`[${method} ${url}] Missing authorization header`);
       throw new UnauthorizedException('Missing authorization header');
     }
 
@@ -52,13 +54,14 @@ export class JwtAuthGuard implements CanActivate {
       ? authHeader.slice(7)
       : authHeader;
     if (!token) {
+      this.logger.warn(`[${method} ${url}] Empty token after Bearer prefix`);
       throw new UnauthorizedException('Missing token');
     }
 
     try {
       const secret = this.configService.get<string>('ACCESS_TOKEN_SECRET') || 'change_me_access';
       const payload = this.jwtService.verify<JwtPayload>(token, { secret });
-      // Try to fetch full user data with related information
+
       try {
         if (this.usersService && typeof this.usersService.getCurrentUser === 'function') {
           const fullUser = await this.usersService.getCurrentUser(payload.user_id);
@@ -67,13 +70,16 @@ export class JwtAuthGuard implements CanActivate {
           request.user = payload;
         }
       } catch (error) {
-        console.log('Error fetching user details:', error);
+        this.logger.warn(`[${method} ${url}] Failed to fetch user details for user_id=${payload.user_id}: ${error.message}`);
         request.user = payload;
       }
-      
+
       return true;
     } catch (error) {
-      console.log('Error', error)
+      this.logger.warn(
+        `[${method} ${url}] Token verification failed — name=${error.name} message=${error.message}` +
+        (error.expiredAt ? ` expiredAt=${error.expiredAt.toISOString()}` : ''),
+      );
       throw new UnauthorizedException('Invalid or expired token');
     }
   }

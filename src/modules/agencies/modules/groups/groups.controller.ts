@@ -28,8 +28,18 @@ export class GroupsController {
   // ── Multi-segment routes before :id ───────────────────────
 
   @Get(':groupId/members')
-  async getPilgrimsInGroup(@Param('groupId') groupId: string, @CurrentUser() user: any) {
-    return this.groupsService.getPilgrimsInGroup(groupId, user.agency_id);
+  async getPilgrimsInGroup(
+    @Param('groupId') groupId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @CurrentUser() user: any,
+  ) {
+    return this.groupsService.getPilgrimsInGroup(
+      groupId,
+      user.agency_id,
+      parseInt(page, 10),
+      parseInt(limit, 10),
+    );
   }
 
   @Post(':groupId/members')

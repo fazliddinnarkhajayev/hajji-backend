@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { GroupsDao, Group } from 'src/modules/admins/modules/groups/groups.dao';
-import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
+import { PaginatedResult, PaginationMeta } from 'src/shared/interfaces/pagination.interface';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
@@ -118,30 +118,28 @@ export class GroupsService {
     });
   }
 
-  async getPilgrimsInGroup(groupId: string, agencyId: string): Promise<any> {
+  async getPilgrimsInGroup(
+    groupId: string,
+    agencyId: string,
+    pageIndex: number = 1,
+    pageSize: number = 10,
+  ): Promise<PaginatedResult<any>> {
     const group = await this.groupsDao.findById(groupId);
     if (!group) throw new NotFoundException(`Group with ID ${groupId} not found`);
     if (group.agency_id !== agencyId) throw new NotFoundException('Group not found for this agency');
 
-    const members = await this.groupMembersDao.getGroupMembersWithDetails(groupId);
-
-    return Promise.all(
-      members.map(async (member: any) => {
-        const pilgrim = await this.pilgrimsDao.findById(member.pilgrim_id);
-        const fullName = pilgrim ? [pilgrim.first_name, pilgrim.middle_name, pilgrim.last_name].filter(Boolean).join(' ') : 'Unknown';
-        return {
-          id: member.id,
-          group_id: member.group_id,
-          pilgrim_id: member.pilgrim_id,
-          full_name: fullName,
-          phone: pilgrim?.phone || null,
-          email: pilgrim?.email || null,
-          agency_id: pilgrim?.agency_id || null,
-          joined_at: member.joined_at,
-          created_at: member.created_at,
-        };
-      }),
+    const { records, total } = await this.groupMembersDao.getGroupMembersWithDetailsPaginated(
+      groupId,
+      pageIndex,
+      pageSize,
     );
+
+    return new PaginatedResult(records, {
+      total_items_count: total,
+      total_pages_count: Math.ceil(total / pageSize) || 1,
+      page_size: pageSize,
+      page_index: pageIndex,
+    });
   }
 
   // ── Room Requests ──────────────────────────────────────────

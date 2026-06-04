@@ -53,6 +53,7 @@ export class AuthController {
 
   // ===================== Token Management =====================
 
+  @IsPublic()
   @Post('refresh-token')
   async refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto);

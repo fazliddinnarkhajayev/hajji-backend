@@ -21,6 +21,7 @@ export interface Group {
   updated_by_id?: string;
   is_deleted?: boolean;
   // Joined data
+  members_count?: number;
   agency?: {
     id?: string;
     name?: string;
@@ -109,6 +110,7 @@ export class GroupsDao extends BaseDao<Group> {
         `${TABLE_NAMES.GROUPS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.PILGRIMS}.id, 'first_name', ${TABLE_NAMES.PILGRIMS}.first_name, 'last_name', ${TABLE_NAMES.PILGRIMS}.last_name) as guide_pilgrim`),
+        this.db.raw(`(SELECT COUNT(*)::int FROM ${TABLE_NAMES.GROUP_MEMBERS} WHERE group_id = ${TABLE_NAMES.GROUPS}.id) as members_count`),
       )
       .where((builder) => {
         Object.entries(where).forEach(([key, value]) => {

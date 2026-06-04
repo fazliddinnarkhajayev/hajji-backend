@@ -489,22 +489,25 @@ export class AuthService {
 
   async refreshToken(dto: RefreshTokenDto): Promise<{ access_token: string }> {
     return this.db.transaction(async (trx) => {
-      // Find refresh token in database
+      this.logger.log('refreshToken: looking up refresh token in DB');
+
       const refreshTokenRecord = await this.refreshTokensDao.findRefreshToken(
         dto.refresh_token,
         trx,
       );
-      console.log("refreshTokenRecord", refreshTokenRecord);
+
       if (!refreshTokenRecord) {
+        this.logger.warn('refreshToken: token not found in DB');
         throw new UnauthorizedException("Invalid or expired refresh token");
       }
 
-      // Check if token is revoked
+      this.logger.log(`refreshToken: found record id=${refreshTokenRecord.id} user_id=${refreshTokenRecord.user_id} is_revoked=${refreshTokenRecord.is_revoked} expires_at=${refreshTokenRecord.expires_at}`);
+
       if (refreshTokenRecord.is_revoked) {
+        this.logger.warn(`refreshToken: token is revoked — user_id=${refreshTokenRecord.user_id}`);
         throw new UnauthorizedException("Refresh token has been revoked");
       }
 
-      // Verify token signature
       try {
         const payload = this.jwtService.verify<any>(dto.refresh_token, {
           secret:
@@ -512,13 +515,14 @@ export class AuthService {
             "change_me_refresh",
         });
 
-        // Verify user exists and is not blocked/deleted
+        this.logger.log(`refreshToken: JWT valid for user_id=${payload.user_id} type=${payload.type}`);
+
         const user = await this.usersAuthDao.findUserById(payload.user_id, trx);
         if (!user || user.is_blocked || user.deleted_at) {
+          this.logger.warn(`refreshToken: user blocked or deleted — user_id=${payload.user_id} is_blocked=${user?.is_blocked} deleted_at=${user?.deleted_at}`);
           throw new ForbiddenException("User is blocked or deleted");
         }
 
-        // Generate new access token only
         const accessToken = this.jwtService.sign(
           {
             user_id: payload.user_id,
@@ -534,9 +538,10 @@ export class AuthService {
           },
         );
 
+        this.logger.log(`refreshToken: issued new access token for user_id=${payload.user_id}`);
         return { access_token: accessToken };
       } catch (error) {
-        console.log("Error", error);
+        this.logger.error(`refreshToken: failed — ${error.name}: ${error.message}`);
         throw new UnauthorizedException("Invalid refresh token");
       }
     });

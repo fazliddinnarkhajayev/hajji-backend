@@ -51,12 +51,49 @@ export class GroupMembersDao extends BaseDao<GroupMember> {
     groupId: string,
     trx?: Knex.Transaction,
   ): Promise<any[]> {
-    // Just return group members - frontend can fetch pilgrim details separately
     const records = await this.qb(trx)
       .where({ group_id: groupId })
       .orderBy('joined_at', 'desc');
-
     return records as any[];
+  }
+
+  async getGroupMembersWithDetailsPaginated(
+    groupId: string,
+    pageIndex: number = 1,
+    pageSize: number = 10,
+    trx?: Knex.Transaction,
+  ): Promise<{ records: any[]; total: number }> {
+    const offset = (pageIndex - 1) * pageSize;
+
+    const [{ count }] = await this.qb(trx)
+      .where({ group_id: groupId })
+      .count('* as count');
+
+    const records = await this.qb(trx)
+      .leftJoin(
+        TABLE_NAMES.PILGRIMS,
+        `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`,
+        `${TABLE_NAMES.PILGRIMS}.id`,
+      )
+      .where({ [`${TABLE_NAMES.GROUP_MEMBERS}.group_id`]: groupId })
+      .select(
+        `${TABLE_NAMES.GROUP_MEMBERS}.id`,
+        `${TABLE_NAMES.GROUP_MEMBERS}.group_id`,
+        `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`,
+        `${TABLE_NAMES.GROUP_MEMBERS}.joined_at`,
+        `${TABLE_NAMES.GROUP_MEMBERS}.created_at`,
+        this.db.raw(
+          `TRIM(CONCAT_WS(' ', ${TABLE_NAMES.PILGRIMS}.first_name, NULLIF(${TABLE_NAMES.PILGRIMS}.middle_name, ''), ${TABLE_NAMES.PILGRIMS}.last_name)) as full_name`,
+        ),
+        `${TABLE_NAMES.PILGRIMS}.phone`,
+        `${TABLE_NAMES.PILGRIMS}.email`,
+        `${TABLE_NAMES.PILGRIMS}.agency_id`,
+      )
+      .orderBy(`${TABLE_NAMES.GROUP_MEMBERS}.joined_at`, 'desc')
+      .limit(pageSize)
+      .offset(offset);
+
+    return { records: records as any[], total: Number(count) };
   }
 
   async checkPilgrimExistsInGroup(
