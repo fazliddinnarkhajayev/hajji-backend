@@ -23,4 +23,7 @@ export const TABLE_NAMES = {
   GROUP_PLANS: 'group_plans',
   GROUP_PLAN_PROCEDURES: 'group_plan_procedures',
   GROUP_PLAN_CONFIRMATIONS: 'group_plan_confirmations',
+  SUPERVISOR_MANAGER_ASSIGNMENTS: 'supervisor_manager_assignments',
+  TASK_CATEGORIES: 'task_categories',
+  TASKS: 'tasks',
 } as const;
