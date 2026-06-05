@@ -164,6 +164,7 @@ export class AuthService {
         UserTypesEnum.AGENCY_USER,
         agencyUser.role,
         trx,
+        agencyUser.agency_id,
       );
 
       return {
@@ -528,6 +529,7 @@ export class AuthService {
             user_id: payload.user_id,
             type: payload.type,
             ...(payload.role && { role: payload.role }),
+            ...(payload.agency_id && { agency_id: payload.agency_id }),
           } as any,
           {
             secret:
@@ -538,7 +540,7 @@ export class AuthService {
           },
         );
 
-        this.logger.log(`refreshToken: issued new access token for user_id=${payload.user_id}`);
+        this.logger.log(`refreshToken: issued new access token for user_id=${payload.user_id} agency_id=${payload.agency_id}`);
         return { access_token: accessToken };
       } catch (error) {
         this.logger.error(`refreshToken: failed — ${error.name}: ${error.message}`);
@@ -575,13 +577,15 @@ export class AuthService {
   private async generateTokens(
     userId: string,
     userType: "ADMIN" | "PILGRIM" | "AGENCY_USER",
-    role?: "STAFF" | "SUPER_ADMIN",
+    role?: string,
     trx?: Knex.Transaction,
+    agencyId?: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
     const payload: any = {
       user_id: userId,
       type: userType,
       ...(role && { role }),
+      ...(agencyId && { agency_id: agencyId }),
     };
 
     // Generate access token
@@ -591,7 +595,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload, {
       secret: accessSecret,
       expiresIn:
-        parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") || "900", 10),
+        parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") || "60000", 10),
     });
 
     // Generate refresh token

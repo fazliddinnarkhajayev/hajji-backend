@@ -6,6 +6,9 @@ import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
 import { WebSocketService } from 'src/modules/websocket/websocket.service';
 import { AgencyUsersDao } from 'src/modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
 import { RoomRequestsDao, RoomRequestWithMembers } from 'src/shared/dao/room-requests.dao';
+import { GroupMembersDao } from 'src/shared/dao/group-members.dao';
+import { RoomsDao, RoomWithMembers } from 'src/shared/dao/rooms.dao';
+import { GroupPlansDao, PlanProceduresDao, PlanConfirmationsDao } from 'src/modules/agencies/modules/plans/plans.dao';
 
 @Injectable()
 export class GroupsService {
@@ -14,6 +17,11 @@ export class GroupsService {
     private readonly webSocketService: WebSocketService,
     private readonly agencyUsersDao: AgencyUsersDao,
     private readonly roomRequestsDao: RoomRequestsDao,
+    private readonly groupMembersDao: GroupMembersDao,
+    private readonly roomsDao: RoomsDao,
+    private readonly plansDao: GroupPlansDao,
+    private readonly proceduresDao: PlanProceduresDao,
+    private readonly confirmationsDao: PlanConfirmationsDao,
   ) {}
 
   async create(dto: CreateGroupDto, userId?: string): Promise<Group> {
@@ -120,6 +128,46 @@ export class GroupsService {
     if (!group) throw new NotFoundException('Group not found');
     return this.roomRequestsDao.findByGroupId(groupId);
   }
+
+  // ── Members ────────────────────────────────────────────────
+
+  async getGroupMembers(groupId: string, pageIndex = 1, pageSize = 10): Promise<PaginatedResult<any>> {
+    const group = await this.groupsDao.findById(groupId);
+    if (!group) throw new NotFoundException('Group not found');
+    const { records, total } = await this.groupMembersDao.getGroupMembersWithDetailsPaginated(groupId, pageIndex, pageSize);
+    return new PaginatedResult(records, {
+      total_items_count: total,
+      total_pages_count: Math.ceil(total / pageSize) || 1,
+      page_size: pageSize,
+      page_index: pageIndex,
+    });
+  }
+
+  // ── Rooms ────────────────────────────────────────────────
+
+  async getGroupRooms(groupId: string): Promise<RoomWithMembers[]> {
+    const group = await this.groupsDao.findById(groupId);
+    if (!group) throw new NotFoundException('Group not found');
+    return this.roomsDao.findByGroupId(groupId);
+  }
+
+  // ── Plans ────────────────────────────────────────────────
+
+  async getGroupPlans(groupId: string): Promise<any[]> {
+    const group = await this.groupsDao.findById(groupId);
+    if (!group) throw new NotFoundException('Group not found');
+    const plans = await this.plansDao.findByGroupId(groupId);
+    return Promise.all(plans.map(async (plan) => {
+      const procedures = await this.proceduresDao.findByPlanId(plan.id);
+      const confirmations = await Promise.all(procedures.map(p => this.confirmationsDao.findByProcedureId(p.id)));
+      return {
+        ...plan,
+        procedures: procedures.map((p, i) => ({ ...p, confirmations: confirmations[i] })),
+      };
+    }));
+  }
+
+  // ── Status ──────────────────────────────────────────────
 
   async changeStatus(
     id: string,

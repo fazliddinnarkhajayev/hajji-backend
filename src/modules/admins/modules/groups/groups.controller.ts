@@ -44,6 +44,24 @@ export class GroupsController {
     return this.groupsService.getRoomRequests(groupId);
   }
 
+  @Get(':groupId/members')
+  async getGroupMembers(
+    @Param('groupId') groupId: string,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.groupsService.getGroupMembers(groupId, pagination.page_index, pagination.page_size);
+  }
+
+  @Get(':groupId/rooms')
+  async getGroupRooms(@Param('groupId') groupId: string) {
+    return this.groupsService.getGroupRooms(groupId);
+  }
+
+  @Get(':groupId/plans')
+  async getGroupPlans(@Param('groupId') groupId: string) {
+    return this.groupsService.getGroupPlans(groupId);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.groupsService.findOne(id);

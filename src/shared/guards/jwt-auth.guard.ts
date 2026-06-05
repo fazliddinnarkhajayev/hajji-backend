@@ -14,8 +14,9 @@ import { UsersService } from 'src/modules/users/users.service';
 export interface JwtPayload {
   user_id: string;
   phone?: string;
-  role?: 'PILGRIM' | 'STAFF' | 'SUPER_ADMIN';
-  type?: 'ADMIN' | 'PILGRIM';
+  role?: string;
+  type?: 'ADMIN' | 'PILGRIM' | 'AGENCY_USER';
+  agency_id?: string;
 }
 
 @Injectable()
@@ -62,16 +63,20 @@ export class JwtAuthGuard implements CanActivate {
       const secret = this.configService.get<string>('ACCESS_TOKEN_SECRET') || 'change_me_access';
       const payload = this.jwtService.verify<JwtPayload>(token, { secret });
 
+      // payload already contains user_id, type, role, agency_id (for AGENCY_USER)
+      request.user = payload;
+
+      // Optionally enrich with full user data if UsersService is available
       try {
         if (this.usersService && typeof this.usersService.getCurrentUser === 'function') {
           const fullUser = await this.usersService.getCurrentUser(payload.user_id);
-          request.user = fullUser || payload;
-        } else {
-          request.user = payload;
+          if (fullUser) {
+            // Merge: keep JWT fields (agency_id, role) as primary source of truth
+            request.user = { ...payload, ...fullUser };
+          }
         }
       } catch (error) {
-        this.logger.warn(`[${method} ${url}] Failed to fetch user details for user_id=${payload.user_id}: ${error.message}`);
-        request.user = payload;
+        this.logger.warn(`[${method} ${url}] Failed to enrich user details, using JWT payload. Error: ${error.message}`);
       }
 
       return true;
