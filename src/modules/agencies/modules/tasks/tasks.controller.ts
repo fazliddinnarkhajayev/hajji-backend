@@ -15,7 +15,7 @@ export class AssignmentsController {
   // supervisor_id ixtiyoriy: SUPERADMIN boshqa supervisor uchun qo'sha oladi
   @Post()
   assign(@Body() dto: AssignManagerDto, @CurrentUser() user: any) {
-    const supervisorId = dto.supervisor_id ?? user.id;
+    const supervisorId = dto.supervisor_id ?? user.agencyUser.id;
     return this.service.assignManager(supervisorId, dto.manager_id, user.agency_id);
   }
 
@@ -25,13 +25,13 @@ export class AssignmentsController {
     @Query('supervisor_id') supervisorId: string | undefined,
     @CurrentUser() user: any,
   ) {
-    return this.service.unassignManager(supervisorId ?? user.id, managerId, user.agency_id);
+    return this.service.unassignManager(supervisorId ?? user.agencyUser.id, managerId, user.agency_id);
   }
 
   // Joriy foydalanuvchining managerlar ro'yxati (supervisor o'zi uchun)
   @Get('my-managers')
   getMyManagers(@CurrentUser() user: any) {
-    return this.service.getMyManagers(user.id, user.agency_id);
+    return this.service.getMyManagers(user.agencyUser.id, user.agency_id);
   }
 
   // Istalgan supervisor managerlarini ko'rish (SUPERADMIN uchun)
@@ -72,13 +72,13 @@ export class TasksController {
 
   @Post()
   create(@Body() dto: CreateTaskDto, @CurrentUser() user: any) {
-    return this.service.createTask(user.id, user.agency_id, dto);
+    return this.service.createTask(user.agencyUser.id, user.agency_id, dto);
   }
 
   @Get()
   list(@Query() pagination: PaginationDto, @CurrentUser() user: any) {
     return this.service.getTasksForUser(
-      user.id,
+      user.agencyUser.id,
       user.agency_id,
       user.role,
       pagination.page_index,
@@ -97,11 +97,11 @@ export class TasksController {
     @Body() dto: CompleteTaskDto,
     @CurrentUser() user: any,
   ) {
-    return this.service.completeTask(id, user.id, user.agency_id, dto);
+    return this.service.completeTask(id, user.agencyUser.id, user.agency_id, dto);
   }
 
   @Patch(':id/cancel')
   cancel(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.cancelTask(id, user.id, user.agency_id);
+    return this.service.cancelTask(id, user.agencyUser.id, user.agency_id);
   }
 }
