@@ -84,6 +84,15 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     } as Partial<Pilgrim>);
   }
 
+  async searchPilgrimsByPhoneOrPinfl(query: any) {
+    const { page = '1', limit = '10', search } = query;
+    if (!search) {
+      return await this.pilgrimsDao.findManyPaginated({ is_deleted: false }, 1, 10);
+    }
+    const normalized = this.sundryService.normalizePhone(search);
+    return await this.pilgrimsDao.searchByPhoneOrPinfl(normalized, parseInt(page, 10), parseInt(limit, 10));
+  }
+
   async getGuides(user: any, query: any) {
     const { page = '1', limit = '10', has_group } = query;
     const pageIndex = parseInt(page, 10);

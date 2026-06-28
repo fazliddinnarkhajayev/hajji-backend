@@ -17,6 +17,7 @@ export interface Pilgrim {
   region_id?: string | null;
   district_id?: string | null;
   agency_id?: string | null;
+  pinfl?: string | null;
   language?: string;
   user_id: string;
   status: 'ACTIVE' | 'BLOCKED';
@@ -335,6 +336,54 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
       )
       .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc');
+
+    return new PaginatedResult(records as Pilgrim[], {
+      total_items_count: totalItemsCount,
+      total_pages_count: totalPagesCount,
+      page_size: pageSize,
+      page_index: pageIndex,
+    });
+  }
+
+  async searchByPhoneOrPinfl(
+    search: string,
+    pageIndex: number = 1,
+    pageSize: number = 10,
+    trx?: Knex.Transaction,
+  ) {
+    const { PaginatedResult } = await import('../interfaces/pagination.interface');
+
+    const offset = (pageIndex - 1) * pageSize;
+    const pattern = `%${search}%`;
+
+    const applySearch = (builder: Knex.QueryBuilder) => {
+      builder
+        .where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false)
+        .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
+        .where((q) => {
+          q.where(`${TABLE_NAMES.PILGRIMS}.phone`, 'ILIKE', pattern)
+            .orWhere(`${TABLE_NAMES.PILGRIMS}.pinfl`, 'ILIKE', pattern);
+        });
+    };
+
+    const [{ count }] = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .where((b) => applySearch(b))
+      .count('* as count');
+
+    const totalItemsCount = Number(count);
+    const totalPagesCount = Math.ceil(totalItemsCount / pageSize);
+
+    const records = await this.qb(trx)
+      .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
+      .select(
+        `${TABLE_NAMES.PILGRIMS}.*`,
+        this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+      )
+      .where((b) => applySearch(b))
+      .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc')
+      .limit(pageSize)
+      .offset(offset);
 
     return new PaginatedResult(records as Pilgrim[], {
       total_items_count: totalItemsCount,

@@ -32,4 +32,8 @@ export class UpdatePilgrimDto {
   @IsOptional()
   @IsUUID()
   district_id?: string;
+
+  @IsOptional()
+  @IsString()
+  pinfl?: string;
 }

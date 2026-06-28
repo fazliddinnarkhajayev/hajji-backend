@@ -23,6 +23,11 @@ export class AgencyPilgrimsController {
     return this.pilgrimsService.getGuides(user, query);
   }
 
+  @Get('search')
+  async searchPilgrims(@Query() query: any) {
+    return this.pilgrimsService.searchPilgrimsByPhoneOrPinfl(query);
+  }
+
   @Get(':userId')
   async getPilgrimDetails(@Param('userId') userId: string) {
     return this.pilgrimsService.getPilgrimDetails(userId);

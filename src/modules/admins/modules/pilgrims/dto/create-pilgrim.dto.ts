@@ -31,4 +31,8 @@ export class CreatePilgrimDto {
   @IsOptional()
   @IsUUID()
   district_id?: string;
+
+  @IsOptional()
+  @IsString()
+  pinfl?: string;
 }
