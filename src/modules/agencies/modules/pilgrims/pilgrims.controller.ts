@@ -1,11 +1,20 @@
-import { Controller, Get, Param, Query, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Patch } from '@nestjs/common';
 import { AgencyPilgrimsService } from './pilgrims.service';
 import { JwtAuthGuard, JwtPayload } from 'src/shared/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/shared/decorators/current-user.decorator';
+import { CreatePilgrimDto } from './dto/create-pilgrim.dto';
 
 @Controller('agencies/pilgrims')
 export class AgencyPilgrimsController {
   constructor(private readonly pilgrimsService: AgencyPilgrimsService) {}
+
+  @Post()
+  async create(
+    @Body() dto: CreatePilgrimDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.pilgrimsService.create(dto, user);
+  }
 
   @Get()
   async getAgencyPilgrims(

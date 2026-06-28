@@ -1,18 +1,55 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Knex } from 'knex';
 import { BaseService } from 'src/shared/services/base.service';
 import { PilgrimsDao, Pilgrim } from 'src/shared/dao/piligrims.dao';
 import { AgencyUsersDao } from 'src/modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
+import { UsersService } from 'src/modules/users/users.service';
+import { UserTypesEnum } from 'src/shared/enums/user-types.enum';
 import { JwtPayload } from 'src/shared/guards/jwt-auth.guard';
 import { SundryService } from 'src/shared/services/sundry.service';
+import { CreatePilgrimDto } from './dto/create-pilgrim.dto';
 
 @Injectable()
 export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   constructor(
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly agencyUsersDao: AgencyUsersDao,
+    private readonly usersService: UsersService,
     private readonly sundryService: SundryService,
   ) {
     super(pilgrimsDao);
+  }
+
+  async create(dto: CreatePilgrimDto, user: any): Promise<Pilgrim> {
+    const run = async (t: Knex.Transaction) => {
+      const phone = this.sundryService.normalizePhone(dto.phone);
+      const newUser = await this.usersService.create(
+        {
+          username: phone,
+          type: UserTypesEnum.PILGRIM,
+          created_by_id: user.id,
+        } as any,
+        t,
+      );
+
+      return this.pilgrimsDao.insert(
+        {
+          first_name: dto.first_name,
+          last_name: dto.last_name,
+          middle_name: dto.middle_name,
+          phone: phone,
+          email: dto.email,
+          country_id: dto.country_id,
+          region_id: dto.region_id,
+          district_id: dto.district_id,
+          user_id: newUser.id,
+          agency_id: user.agency_id,
+        } as Partial<Pilgrim>,
+        t,
+      );
+    };
+
+    return this.transaction(run);
   }
 
   async getAgencyPilgrims(user: any, query: any) {
