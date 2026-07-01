@@ -18,6 +18,7 @@ import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { LogoutDto } from "./dto/logout.dto";
+import { AgencyResetPasswordDto } from "./dto/agency-reset-password.dto";
 import { UsersAuthDao, UserRecord } from "../../shared/dao/users-auth.dao";
 import { AdminsDao } from "../../shared/dao/admins.dao";
 import { OtpSessionsDao } from "../../shared/dao/otp-sessions.dao";
@@ -171,6 +172,38 @@ export class AuthService {
         ...tokens,
         user: agencyUser,
       };
+    });
+  }
+
+  // ===================== Agency User Reset Password =====================
+
+  async agencyResetPassword(
+    user: any,
+    dto: AgencyResetPasswordDto,
+  ): Promise<{ success: boolean }> {
+    if (user.type !== UserTypesEnum.AGENCY_USER) {
+      throw new ForbiddenException("Only agency users can use this endpoint");
+    }
+
+    return this.db.transaction(async (trx) => {
+      const record = await this.usersAuthDao.findUserById(user.id, trx);
+      if (!record) {
+        throw new UnauthorizedException("User not found");
+      }
+
+      if (
+        !record.password_hash ||
+        !(await bcrypt.compare(dto.current_password, record.password_hash))
+      ) {
+        throw new BadRequestException("Current password is incorrect");
+      }
+
+      const passwordHash = this.sundryService.generateHashPassword(
+        dto.new_password,
+      );
+      await this.usersAuthDao.updatePassword(user.id, passwordHash, trx);
+
+      return { success: true };
     });
   }
 

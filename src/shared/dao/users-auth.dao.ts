@@ -80,4 +80,12 @@ export class UsersAuthDao {
         last_login_at: this.db.fn.now() as unknown as Date
       });
   }
+
+  async updatePassword(userId: string, passwordHash: string, trx?: Knex.Transaction): Promise<void> {
+    await this.qb(trx)
+      .where({ id: userId })
+      .update({
+        password_hash: passwordHash
+      });
+  }
 }

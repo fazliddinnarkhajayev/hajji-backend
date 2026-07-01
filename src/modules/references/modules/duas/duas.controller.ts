@@ -45,7 +45,7 @@ export class DuasController {
       limits: { fileSize: 20 * 1024 * 1024 },
     }),
   )
-  async uploadAudio(@UploadedFile() file: Express.Multer.File) {
+  async uploadAudio(@UploadedFile() file: any) {
     if (!file) throw new BadRequestException('No file uploaded');
     return { url: `/uploads/audio/${file.filename}` };
   }
