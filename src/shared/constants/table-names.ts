@@ -26,4 +26,6 @@ export const TABLE_NAMES = {
   SUPERVISOR_MANAGER_ASSIGNMENTS: 'supervisor_manager_assignments',
   TASK_CATEGORIES: 'task_categories',
   TASKS: 'tasks',
+  TASK_ACTIVITY_LOG: 'task_activity_log',
+  NOTIFICATIONS: 'notifications',
 } as const;

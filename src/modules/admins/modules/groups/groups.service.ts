@@ -4,6 +4,7 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
 import { WebSocketService } from 'src/modules/websocket/websocket.service';
+import { NotificationsService } from 'src/modules/notifications/notifications.service';
 import { AgencyUsersDao } from 'src/modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
 import { RoomRequestsDao, RoomRequestWithMembers } from 'src/shared/dao/room-requests.dao';
 import { GroupMembersDao } from 'src/shared/dao/group-members.dao';
@@ -15,6 +16,7 @@ export class GroupsService {
   constructor(
     private readonly groupsDao: GroupsDao,
     private readonly webSocketService: WebSocketService,
+    private readonly notificationsService: NotificationsService,
     private readonly agencyUsersDao: AgencyUsersDao,
     private readonly roomRequestsDao: RoomRequestsDao,
     private readonly groupMembersDao: GroupMembersDao,
@@ -53,6 +55,11 @@ export class GroupsService {
         type: 'GROUP_CREATED',
         group: groupWithDetails,
         message: `A new group "${groupWithDetails?.name}" has been created`,
+      });
+      this.notificationsService.notify(agencyUser.user_id, 'GROUP_CREATED', 'New group created', {
+        message: `A new group "${groupWithDetails?.name}" has been created`,
+        subject: groupWithDetails?.name,
+        link: { screen: 'groupDetail', id: groupWithDetails?.id },
       });
     });
 

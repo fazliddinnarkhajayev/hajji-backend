@@ -7,8 +7,9 @@ import { PilgrimsModule } from './pilgrims/pilgrims.module';
 import { MobileModule } from './mobile/mobile.module';
 import { AgenciesModule } from './agencies/agencies.module';
 import { WebSocketModule } from './websocket/websocket.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
-  imports: [AdminsModule, ReferencesModule, AuthModule, UsersModule, PilgrimsModule, MobileModule, AgenciesModule, WebSocketModule],
+  imports: [AdminsModule, ReferencesModule, AuthModule, UsersModule, PilgrimsModule, MobileModule, AgenciesModule, WebSocketModule, NotificationsModule],
 })
 export class ModulesModule { }

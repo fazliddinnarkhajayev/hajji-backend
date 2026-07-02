@@ -521,7 +521,7 @@ export class AuthService {
 
   // ===================== Refresh Token =====================
 
-  async refreshToken(dto: RefreshTokenDto): Promise<{ access_token: string }> {
+  async refreshToken(dto: RefreshTokenDto): Promise<{ access_token: string; refresh_token: string }> {
     return this.db.transaction(async (trx) => {
       this.logger.log('refreshToken: looking up refresh token in DB');
 
@@ -557,24 +557,19 @@ export class AuthService {
           throw new ForbiddenException("User is blocked or deleted");
         }
 
-        const accessToken = this.jwtService.sign(
-          {
-            user_id: payload.user_id,
-            type: payload.type,
-            ...(payload.role && { role: payload.role }),
-            ...(payload.agency_id && { agency_id: payload.agency_id }),
-          } as any,
-          {
-            secret:
-              this.configService.get<string>("ACCESS_TOKEN_SECRET") ||
-              "change_me_access",
-            expiresIn:
-              parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") ?? "900", 10),
-          },
+        // Rotate: mint a fresh access+refresh pair via the same path login uses,
+        // then revoke the refresh token that was just spent.
+        const tokens = await this.generateTokens(
+          payload.user_id,
+          payload.type,
+          payload.role,
+          trx,
+          payload.agency_id,
         );
+        await this.refreshTokensDao.revokeRefreshToken(refreshTokenRecord.id, trx);
 
-        this.logger.log(`refreshToken: issued new access token for user_id=${payload.user_id} agency_id=${payload.agency_id}`);
-        return { access_token: accessToken };
+        this.logger.log(`refreshToken: issued new token pair for user_id=${payload.user_id} agency_id=${payload.agency_id}`);
+        return tokens;
       } catch (error) {
         this.logger.error(`refreshToken: failed — ${error.name}: ${error.message}`);
         throw new UnauthorizedException("Invalid refresh token");
@@ -627,15 +622,13 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: accessSecret,
-      expiresIn:
-        parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") || "60000", 10),
+      expiresIn: this.parseExpiresIn(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN"), 900) as any,
     });
 
     // Generate refresh token
     const refreshToken = this.jwtService.sign(payload, {
       secret: refreshSecret,
-      expiresIn:
-        parseInt(this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN") || "604800", 10),
+      expiresIn: this.parseExpiresIn(this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN"), 604800) as any,
     });
 
     // Store refresh token in database
@@ -653,5 +646,16 @@ export class AuthService {
     );
 
     return { access_token: accessToken, refresh_token: refreshToken };
+  }
+
+  // jsonwebtoken's expiresIn accepts either a number of seconds or a duration
+  // string like "1h"/"15m"/"7d" (parsed via the `ms` package) — but NOT both in
+  // one value. Blindly parseInt()-ing "1h" silently truncates to 1, i.e. 1 SECOND,
+  // which is what was making access tokens expire almost immediately after being
+  // issued. Only coerce to a number when the value is purely digits (raw seconds);
+  // otherwise pass the duration string straight through.
+  private parseExpiresIn(value: string | undefined, fallbackSeconds: number): string | number {
+    if (!value) return fallbackSeconds;
+    return /^\d+$/.test(value) ? parseInt(value, 10) : value;
   }
 }
