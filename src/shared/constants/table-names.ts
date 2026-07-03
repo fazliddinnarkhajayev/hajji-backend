@@ -28,4 +28,7 @@ export const TABLE_NAMES = {
   TASKS: 'tasks',
   TASK_ACTIVITY_LOG: 'task_activity_log',
   NOTIFICATIONS: 'notifications',
+  CHAT_ROOMS: 'chat_rooms',
+  CHAT_ROOM_MEMBERS: 'chat_room_members',
+  CHAT_MESSAGES: 'chat_messages',
 } as const;

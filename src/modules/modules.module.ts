@@ -8,8 +8,9 @@ import { MobileModule } from './mobile/mobile.module';
 import { AgenciesModule } from './agencies/agencies.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
-  imports: [AdminsModule, ReferencesModule, AuthModule, UsersModule, PilgrimsModule, MobileModule, AgenciesModule, WebSocketModule, NotificationsModule],
+  imports: [AdminsModule, ReferencesModule, AuthModule, UsersModule, PilgrimsModule, MobileModule, AgenciesModule, WebSocketModule, NotificationsModule, ChatModule],
 })
 export class ModulesModule { }
