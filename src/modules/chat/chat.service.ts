@@ -92,7 +92,7 @@ export class ChatService {
   }
 
   async sendMessage(roomId: string, userId: string, agencyId: string, dto: SendMessageDto, file?: { url: string; name: string; size: string }) {
-    await this.assertMember(roomId, userId, agencyId);
+    const room = await this.assertMember(roomId, userId, agencyId);
     if (!dto.text && !file) throw new BadRequestException('Message must have text or a file');
 
     const row = await this.chatDao.insertMessage({
@@ -108,15 +108,17 @@ export class ChatService {
 
     const mapped = this.mapMessage(row);
     const memberIds = await this.chatDao.getMemberUserIds(roomId);
-    const preview = file ? `📎 ${file.name}` : dto.text ?? '';
+    // A dm room only has 2 members, so "the room" from the receiver's point of
+    // view is always the sender's name — same as how listRooms() derives a dm
+    // room's display name. Groups just use their own name.
+    const roomDisplayName = room.type === 'group' ? room.name ?? '' : mapped.sender_name;
 
     memberIds
       .filter((id) => id !== userId)
       .forEach((memberId) => {
         this.webSocketService.broadcastToUser(memberId, 'message:new', { message: mapped, room_id: roomId });
-        this.notificationsService.notify(memberId, 'CHAT_MESSAGE', mapped.sender_name, {
-          message: preview,
-          subject: mapped.sender_name,
+        this.notificationsService.notify(memberId, 'CHAT_MESSAGE', roomDisplayName, {
+          subject: roomDisplayName,
           link: { screen: 'chatDetail', id: roomId },
         });
       });
@@ -151,10 +153,11 @@ export class ChatService {
     return this.chatDao.createGroupRoom(agencyId, userId, dto.name, dto.member_user_ids);
   }
 
-  private async assertMember(roomId: string, userId: string, agencyId: string): Promise<void> {
+  private async assertMember(roomId: string, userId: string, agencyId: string) {
     const room = await this.chatDao.findRoomById(roomId);
     if (!room || room.agency_id !== agencyId) throw new NotFoundException('Room not found');
     const isMember = await this.chatDao.isMember(roomId, userId);
     if (!isMember) throw new ForbiddenException('You are not a member of this room');
+    return room;
   }
 }
