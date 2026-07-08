@@ -10,22 +10,25 @@ export class LocationsController {
 
   @Post()
   async create(@Body() createLocationDto: CreateLocationDto) {
-    return this.locationsService.create(createLocationDto);
+    return this.locationsService.createWithTranslations(createLocationDto);
   }
 
   @Get()
   async findAll(@Query() pagination: PaginationDto) {
-    return this.locationsService.findAllPaginated({}, pagination.page_index, pagination.page_size);
+    return this.locationsService.findAllPaginatedWithTranslations(
+      pagination.page_index ?? 1,
+      pagination.page_size ?? 10,
+    );
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.locationsService.findOne(id);
+    return this.locationsService.findOneWithTranslations(id);
   }
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() updateLocationDto: UpdateLocationDto) {
-    return this.locationsService.update(id, updateLocationDto);
+    return this.locationsService.updateWithTranslations(id, updateLocationDto);
   }
 
   @Delete(':id')
