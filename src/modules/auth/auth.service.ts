@@ -67,7 +67,7 @@ export class AuthService {
     private readonly districtsDao: DistrictsDao,
     private readonly sundryService: SundryService,
     private readonly smsService: SmsService,
-  ) { }
+  ) {}
 
   // ===================== Admin Login =====================
 
@@ -233,7 +233,9 @@ export class AuthService {
     }
     const pilgrim = await this.pilgrimsDao.findByUserId(user.id);
     if (!pilgrim) {
-      throw new BadRequestException("No pilgrim profile found for this account");
+      throw new BadRequestException(
+        "No pilgrim profile found for this account",
+      );
     }
 
     // Generate OTP code (6 digits)
@@ -254,7 +256,6 @@ export class AuthService {
     );
 
     // Deliver the code via the requested channel.
-    const isDev = this.configService.get<string>("NODE_ENV") !== "production";
     const sent =
       dto.method === "TELEGRAM"
         ? await this.smsService.sendTgVerificationCode(phone, code)
@@ -263,11 +264,9 @@ export class AuthService {
     if (!sent) {
       // In development, log the code so the flow is testable without a live
       // SMS/Telegram provider; in production, fail loudly.
-      if (isDev) {
-        this.logger.warn(`[DEV] OTP for ${phone}: ${code} (delivery via ${dto.method} not configured)`);
-      } else {
-        throw new InternalServerErrorException("Failed to send verification code");
-      }
+      throw new InternalServerErrorException(
+        "Failed to send verification code",
+      );
     }
 
     return { success: true, expires_in_minutes: expiryMinutes };
@@ -316,7 +315,9 @@ export class AuthService {
         await this.otpSessionsDao.verifyOtpSession(otpSession.id, trx);
       } else {
         // Test mode: log that test code was used
-        this.logger.warn(`TEST MODE: OTP verification bypassed for phone ${phone} with test code`);
+        this.logger.warn(
+          `TEST MODE: OTP verification bypassed for phone ${phone} with test code`,
+        );
       }
 
       // Find user by phone (username)
@@ -344,7 +345,9 @@ export class AuthService {
       // Ensure pilgrim profile exists
       const pilgrim = await this.pilgrimsDao.findByUserId(user.id, trx);
       if (!pilgrim) {
-        throw new BadRequestException("No pilgrim profile found for this account");
+        throw new BadRequestException(
+          "No pilgrim profile found for this account",
+        );
       }
 
       // Update last login
@@ -382,7 +385,14 @@ export class AuthService {
   private async registerPilgrimManual(
     dto: RegisterDto,
   ): Promise<{ access_token: string; refresh_token: string; user: any }> {
-    if (!dto.first_name || !dto.last_name || !dto.phone || !dto.pinfl || !dto.password || !dto.country_id) {
+    if (
+      !dto.first_name ||
+      !dto.last_name ||
+      !dto.phone ||
+      !dto.pinfl ||
+      !dto.password ||
+      !dto.country_id
+    ) {
       throw new BadRequestException(
         "Missing required fields: first_name, last_name, phone, pinfl, password, country_id",
       );
@@ -392,7 +402,10 @@ export class AuthService {
 
     return this.db.transaction(async (trx) => {
       // Check if user with this phone already exists
-      const existingUser = await this.usersAuthDao.findUserBy({ username: phone }, trx);
+      const existingUser = await this.usersAuthDao.findUserBy(
+        { username: phone },
+        trx,
+      );
       if (existingUser) {
         throw new ConflictException("Phone number is already registered");
       }
@@ -404,14 +417,20 @@ export class AuthService {
       }
 
       // Validate country exists
-      const country = await this.countriesDao.findOne({ id: dto.country_id }, trx);
+      const country = await this.countriesDao.findOne(
+        { id: dto.country_id },
+        trx,
+      );
       if (!country) {
         throw new BadRequestException(`Country not found: ${dto.country_id}`);
       }
 
       // Validate region if provided
       if (dto.region_id) {
-        const region = await this.regionsDao.findOne({ id: dto.region_id } as any, trx);
+        const region = await this.regionsDao.findOne(
+          { id: dto.region_id } as any,
+          trx,
+        );
         if (!region) {
           throw new BadRequestException(`Region not found: ${dto.region_id}`);
         }
@@ -419,39 +438,51 @@ export class AuthService {
 
       // Validate district if provided
       if (dto.district_id) {
-        const district = await this.districtsDao.findOne({ id: dto.district_id } as any, trx);
+        const district = await this.districtsDao.findOne(
+          { id: dto.district_id } as any,
+          trx,
+        );
         if (!district) {
-          throw new BadRequestException(`District not found: ${dto.district_id}`);
+          throw new BadRequestException(
+            `District not found: ${dto.district_id}`,
+          );
         }
       }
 
       // Create user: username = phone, type = PILGRIM
-      const passwordHash = this.sundryService.generateHashPassword(dto.password);
+      const passwordHash = this.sundryService.generateHashPassword(
+        dto.password,
+      );
       const user = await this.usersAuthDao.createUser(
         "PILGRIM",
         phone,
         phone, // username = phone
         passwordHash,
-        trx,        dto.language ?? null,      );
+        trx,
+        dto.language ?? null,
+      );
 
       // Create pilgrim profile
-      const pilgrim = await this.pilgrimsDao.insert({
-        id: randomUUID(),
-        user_id: user.id,
-        first_name: dto.first_name,
-        last_name: dto.last_name,
-        middle_name: dto.middle_name ?? null,
-        phone,
-        pinfl: dto.pinfl,
-        country_id: dto.country_id,
-        region_id: dto.region_id ?? null,
-        district_id: dto.district_id ?? null,
-        is_blocked: false,
-        created_by_id: user.id,
-        created_at: new Date(),
-        updated_at: new Date(),
-        is_deleted: false,
-      } as any, trx);
+      const pilgrim = await this.pilgrimsDao.insert(
+        {
+          id: randomUUID(),
+          user_id: user.id,
+          first_name: dto.first_name,
+          last_name: dto.last_name,
+          middle_name: dto.middle_name ?? null,
+          phone,
+          pinfl: dto.pinfl,
+          country_id: dto.country_id,
+          region_id: dto.region_id ?? null,
+          district_id: dto.district_id ?? null,
+          is_blocked: false,
+          created_by_id: user.id,
+          created_at: new Date(),
+          updated_at: new Date(),
+          is_deleted: false,
+        } as any,
+        trx,
+      );
 
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
@@ -546,9 +577,11 @@ export class AuthService {
 
   // ===================== Refresh Token =====================
 
-  async refreshToken(dto: RefreshTokenDto): Promise<{ access_token: string; refresh_token: string }> {
+  async refreshToken(
+    dto: RefreshTokenDto,
+  ): Promise<{ access_token: string; refresh_token: string }> {
     return this.db.transaction(async (trx) => {
-      this.logger.log('refreshToken: looking up refresh token in DB');
+      this.logger.log("refreshToken: looking up refresh token in DB");
 
       const refreshTokenRecord = await this.refreshTokensDao.findRefreshToken(
         dto.refresh_token,
@@ -556,14 +589,18 @@ export class AuthService {
       );
 
       if (!refreshTokenRecord) {
-        this.logger.warn('refreshToken: token not found in DB');
+        this.logger.warn("refreshToken: token not found in DB");
         throw new UnauthorizedException("Invalid or expired refresh token");
       }
 
-      this.logger.log(`refreshToken: found record id=${refreshTokenRecord.id} user_id=${refreshTokenRecord.user_id} is_revoked=${refreshTokenRecord.is_revoked} expires_at=${refreshTokenRecord.expires_at}`);
+      this.logger.log(
+        `refreshToken: found record id=${refreshTokenRecord.id} user_id=${refreshTokenRecord.user_id} is_revoked=${refreshTokenRecord.is_revoked} expires_at=${refreshTokenRecord.expires_at}`,
+      );
 
       if (refreshTokenRecord.is_revoked) {
-        this.logger.warn(`refreshToken: token is revoked — user_id=${refreshTokenRecord.user_id}`);
+        this.logger.warn(
+          `refreshToken: token is revoked — user_id=${refreshTokenRecord.user_id}`,
+        );
         throw new UnauthorizedException("Refresh token has been revoked");
       }
 
@@ -574,11 +611,15 @@ export class AuthService {
             "change_me_refresh",
         });
 
-        this.logger.log(`refreshToken: JWT valid for user_id=${payload.user_id} type=${payload.type}`);
+        this.logger.log(
+          `refreshToken: JWT valid for user_id=${payload.user_id} type=${payload.type}`,
+        );
 
         const user = await this.usersAuthDao.findUserById(payload.user_id, trx);
         if (!user || user.is_blocked || user.deleted_at) {
-          this.logger.warn(`refreshToken: user blocked or deleted — user_id=${payload.user_id} is_blocked=${user?.is_blocked} deleted_at=${user?.deleted_at}`);
+          this.logger.warn(
+            `refreshToken: user blocked or deleted — user_id=${payload.user_id} is_blocked=${user?.is_blocked} deleted_at=${user?.deleted_at}`,
+          );
           throw new ForbiddenException("User is blocked or deleted");
         }
 
@@ -591,12 +632,19 @@ export class AuthService {
           trx,
           payload.agency_id,
         );
-        await this.refreshTokensDao.revokeRefreshToken(refreshTokenRecord.id, trx);
+        await this.refreshTokensDao.revokeRefreshToken(
+          refreshTokenRecord.id,
+          trx,
+        );
 
-        this.logger.log(`refreshToken: issued new token pair for user_id=${payload.user_id} agency_id=${payload.agency_id}`);
+        this.logger.log(
+          `refreshToken: issued new token pair for user_id=${payload.user_id} agency_id=${payload.agency_id}`,
+        );
         return tokens;
       } catch (error) {
-        this.logger.error(`refreshToken: failed — ${error.name}: ${error.message}`);
+        this.logger.error(
+          `refreshToken: failed — ${error.name}: ${error.message}`,
+        );
         throw new UnauthorizedException("Invalid refresh token");
       }
     });
@@ -642,18 +690,28 @@ export class AuthService {
     };
 
     // Generate access token
-    const accessSecret = this.configService.get<string>("ACCESS_TOKEN_SECRET") || "change_me_access";
-    const refreshSecret = this.configService.get<string>("REFRESH_TOKEN_SECRET") || "change_me_refresh";
+    const accessSecret =
+      this.configService.get<string>("ACCESS_TOKEN_SECRET") ||
+      "change_me_access";
+    const refreshSecret =
+      this.configService.get<string>("REFRESH_TOKEN_SECRET") ||
+      "change_me_refresh";
 
     const accessToken = this.jwtService.sign(payload, {
       secret: accessSecret,
-      expiresIn: this.parseExpiresIn(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN"), 900) as any,
+      expiresIn: this.parseExpiresIn(
+        this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN"),
+        900,
+      ) as any,
     });
 
     // Generate refresh token
     const refreshToken = this.jwtService.sign(payload, {
       secret: refreshSecret,
-      expiresIn: this.parseExpiresIn(this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN"), 604800) as any,
+      expiresIn: this.parseExpiresIn(
+        this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN"),
+        604800,
+      ) as any,
     });
 
     // Store refresh token in database
@@ -679,7 +737,10 @@ export class AuthService {
   // which is what was making access tokens expire almost immediately after being
   // issued. Only coerce to a number when the value is purely digits (raw seconds);
   // otherwise pass the duration string straight through.
-  private parseExpiresIn(value: string | undefined, fallbackSeconds: number): string | number {
+  private parseExpiresIn(
+    value: string | undefined,
+    fallbackSeconds: number,
+  ): string | number {
     if (!value) return fallbackSeconds;
     return /^\d+$/.test(value) ? parseInt(value, 10) : value;
   }

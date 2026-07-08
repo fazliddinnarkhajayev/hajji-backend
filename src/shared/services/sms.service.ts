@@ -42,6 +42,7 @@ export class SmsService {
   /** Sends the OTP through the Telegram Gateway API. `phone` = digits only. */
   async sendTgVerificationCode(phone: string, code: string): Promise<boolean> {
     const token = this.cfg('TELEGRAM_GATEWAY_TOKEN');
+    console.log('token', token)
     if (!token) {
       this.logger.warn('TELEGRAM_GATEWAY_TOKEN not configured');
       return false;
