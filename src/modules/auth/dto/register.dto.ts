@@ -28,11 +28,6 @@ export class RegisterDto {
 
   @ValidateIf((dto) => dto.type === 'MANUAL')
   @IsString()
-  @MinLength(6)
-  password?: string;
-
-  @ValidateIf((dto) => dto.type === 'MANUAL')
-  @IsString()
   @MinLength(1)
   country_id?: string;
 

@@ -72,6 +72,35 @@ export class OtpSessionsDao {
       });
   }
 
+  // Marks a code as verified but NOT yet consumed — used when an unregistered
+  // phone passes OTP and is about to register. `register` later requires such a
+  // session and then consumes it via markUsed().
+  async markVerified(id: string, trx?: Knex.Transaction): Promise<void> {
+    await this.qb(trx)
+      .where({ id })
+      .update({ is_used: false, status: 'VERIFIED' });
+  }
+
+  async markUsed(id: string, trx?: Knex.Transaction): Promise<void> {
+    await this.qb(trx)
+      .where({ id })
+      .update({ is_used: true, status: 'USED' });
+  }
+
+  // Latest VERIFIED (but not yet consumed) session for a phone since `since`.
+  // Backs registration's proof-of-OTP check.
+  async findVerifiedByPhone(
+    phone: string,
+    since: Date,
+    trx?: Knex.Transaction,
+  ): Promise<OtpSessionRecord | undefined> {
+    return this.qb(trx)
+      .where({ phone, status: 'VERIFIED', is_deleted: false })
+      .where('created_at', '>=', since)
+      .orderBy('created_at', 'desc')
+      .first();
+  }
+
   async incrementOtpAttempts(id: string, trx?: Knex.Transaction): Promise<void> {
     await this.qb(trx)
       .where({ id })

@@ -217,25 +217,20 @@ export class AuthService {
   ): Promise<{ success: boolean; expires_in_minutes: number }> {
     const phone = this.sundryService.normalizePhone(dto.phone);
 
-    // Validate user exists, is a PILGRIM, and has a pilgrim profile
+    // OTP may be sent to any phone (registered or not) — the register/login
+    // split happens at verify time. If an account already exists, only reject
+    // when it's blocked, deleted, or not a pilgrim account.
     const user = await this.usersAuthDao.findUserBy({ username: phone });
-    if (!user) {
-      throw new BadRequestException("No account found for this phone number");
-    }
-    if (user.type !== UserTypesEnum.PILGRIM) {
-      throw new ForbiddenException("Account is not a pilgrim account");
-    }
-    if (user.is_blocked) {
-      throw new ForbiddenException("User account is blocked");
-    }
-    if (user.deleted_at) {
-      throw new ForbiddenException("User account has been deleted");
-    }
-    const pilgrim = await this.pilgrimsDao.findByUserId(user.id);
-    if (!pilgrim) {
-      throw new BadRequestException(
-        "No pilgrim profile found for this account",
-      );
+    if (user) {
+      if (user.type !== UserTypesEnum.PILGRIM) {
+        throw new ForbiddenException("Account is not a pilgrim account");
+      }
+      if (user.is_blocked) {
+        throw new ForbiddenException("User account is blocked");
+      }
+      if (user.deleted_at) {
+        throw new ForbiddenException("User account has been deleted");
+      }
     }
 
     // Generate OTP code (6 digits)
@@ -275,15 +270,17 @@ export class AuthService {
   // ===================== Verify OTP & Auto-Register Pilgrim =====================
 
   async verifyOtp(dto: VerifyOtpDto): Promise<{
-    access_token: string;
-    refresh_token: string;
-    is_new_user: boolean;
+    success: boolean;
+    is_registered: boolean;
+    access_token?: string;
+    refresh_token?: string;
   }> {
     const phone = this.sundryService.normalizePhone(dto.phone);
 
     return this.db.transaction(async (trx) => {
       // TEST BYPASS: Allow test code "123456" to skip OTP verification
       const isTestCode = dto.code === "123456";
+      let sessionId: string | null = null;
 
       if (!isTestCode) {
         // Find latest OTP session
@@ -311,60 +308,34 @@ export class AuthService {
           throw new BadRequestException("OTP has expired");
         }
 
-        // Mark OTP as used
-        await this.otpSessionsDao.verifyOtpSession(otpSession.id, trx);
+        sessionId = otpSession.id;
       } else {
-        // Test mode: log that test code was used
         this.logger.warn(
           `TEST MODE: OTP verification bypassed for phone ${phone} with test code`,
         );
       }
 
-      // Find user by phone (username)
+      // Is there a usable registered pilgrim account for this phone?
       const user = await this.usersAuthDao.findUserBy({ username: phone }, trx);
+      const isRegistered =
+        !!user &&
+        user.type === UserTypesEnum.PILGRIM &&
+        !user.is_blocked &&
+        !user.deleted_at &&
+        !!(await this.pilgrimsDao.findByUserId(user.id, trx));
 
-      if (!user) {
-        throw new BadRequestException("No account found for this phone number");
+      if (isRegistered) {
+        // Existing user → log in. Consume the OTP session.
+        if (sessionId) await this.otpSessionsDao.markUsed(sessionId, trx);
+        await this.usersAuthDao.updateLoginAt(user!.id, trx);
+        const tokens = await this.generateTokens(user!.id, "PILGRIM", undefined, trx);
+        return { success: true, is_registered: true, ...tokens };
       }
 
-      // Ensure user is a PILGRIM
-      if (user.type !== UserTypesEnum.PILGRIM) {
-        throw new ForbiddenException("Account is not a pilgrim account");
-      }
-
-      // Check if user is blocked
-      if (user.is_blocked) {
-        throw new ForbiddenException("User account is blocked");
-      }
-
-      // Check if user is deleted
-      if (user.deleted_at) {
-        throw new ForbiddenException("User account has been deleted");
-      }
-
-      // Ensure pilgrim profile exists
-      const pilgrim = await this.pilgrimsDao.findByUserId(user.id, trx);
-      if (!pilgrim) {
-        throw new BadRequestException(
-          "No pilgrim profile found for this account",
-        );
-      }
-
-      // Update last login
-      await this.usersAuthDao.updateLoginAt(user.id, trx);
-
-      // Generate tokens
-      const tokens = await this.generateTokens(
-        user.id,
-        "PILGRIM",
-        undefined,
-        trx,
-      );
-
-      return {
-        ...tokens,
-        is_new_user: false,
-      };
+      // New user → mark the session VERIFIED so the follow-up registration is
+      // authorized (see registerPilgrimManual's proof-of-OTP check).
+      if (sessionId) await this.otpSessionsDao.markVerified(sessionId, trx);
+      return { success: true, is_registered: false };
     });
   }
 
@@ -390,17 +361,31 @@ export class AuthService {
       !dto.last_name ||
       !dto.phone ||
       !dto.pinfl ||
-      !dto.password ||
       !dto.country_id
     ) {
       throw new BadRequestException(
-        "Missing required fields: first_name, last_name, phone, pinfl, password, country_id",
+        "Missing required fields: first_name, last_name, phone, pinfl, country_id",
       );
     }
 
     const phone = this.sundryService.normalizePhone(dto.phone);
+    const isDev = this.configService.get<string>("NODE_ENV") !== "production";
 
     return this.db.transaction(async (trx) => {
+      // Proof-of-OTP: registration is only allowed for a phone that just passed
+      // OTP verification (verify-otp marked a session VERIFIED). In development,
+      // allow it through when no session exists so the flow stays testable.
+      const otpWindowMinutes = 30;
+      const since = new Date(Date.now() - otpWindowMinutes * 60 * 1000);
+      const verifiedSession = await this.otpSessionsDao.findVerifiedByPhone(phone, since, trx);
+      if (!verifiedSession) {
+        if (isDev) {
+          this.logger.warn(`[DEV] register: no verified OTP session for ${phone}, allowing anyway`);
+        } else {
+          throw new BadRequestException("Phone number is not verified. Please verify via OTP first.");
+        }
+      }
+
       // Check if user with this phone already exists
       const existingUser = await this.usersAuthDao.findUserBy(
         { username: phone },
@@ -449,15 +434,13 @@ export class AuthService {
         }
       }
 
-      // Create user: username = phone, type = PILGRIM
-      const passwordHash = this.sundryService.generateHashPassword(
-        dto.password,
-      );
+      // Create user: username = phone, type = PILGRIM. Pilgrims authenticate via
+      // OTP only, so no password is stored.
       const user = await this.usersAuthDao.createUser(
         "PILGRIM",
         phone,
         phone, // username = phone
-        passwordHash,
+        null,
         trx,
         dto.language ?? null,
       );
@@ -483,6 +466,9 @@ export class AuthService {
         } as any,
         trx,
       );
+
+      // Consume the OTP session so it can't be reused for another registration.
+      if (verifiedSession) await this.otpSessionsDao.markUsed(verifiedSession.id, trx);
 
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
