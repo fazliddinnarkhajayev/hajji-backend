@@ -14,11 +14,12 @@ import { CountriesDao } from '../references/modules/countries/countries.dao';
 import { RegionsDao } from '../references/modules/regions/regions.dao';
 import { DistrictsDao } from '../references/modules/districts/districts.dao';
 import { SundryService } from '../../shared/services/sundry.service';
+import { SmsService } from '../../shared/services/sms.service';
 
 @Module({
   imports: [CoreModule, JwtModule.register({}), UsersModule],
   controllers: [AuthController],
-  providers: [AuthService, SundryService, UsersAuthDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao, CountriesDao, RegionsDao, DistrictsDao],
+  providers: [AuthService, SundryService, SmsService, UsersAuthDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao, CountriesDao, RegionsDao, DistrictsDao],
   exports: [AuthService],
 })
 export class AuthModule { }

@@ -1,4 +1,4 @@
-import { IsIn, IsString, IsPhoneNumber, IsOptional, MinLength, ValidateIf } from 'class-validator';
+import { IsIn, IsString, IsPhoneNumber, IsOptional, Matches, MinLength, ValidateIf } from 'class-validator';
 
 export class RegisterDto {
   @IsIn(['MANUAL', 'GOOGLE'])
@@ -21,6 +21,15 @@ export class RegisterDto {
   @ValidateIf((dto) => dto.type === 'MANUAL')
   @IsPhoneNumber()
   phone?: string;
+
+  @ValidateIf((dto) => dto.type === 'MANUAL')
+  @Matches(/^\d{14}$/, { message: 'pinfl must be exactly 14 digits' })
+  pinfl?: string;
+
+  @ValidateIf((dto) => dto.type === 'MANUAL')
+  @IsString()
+  @MinLength(6)
+  password?: string;
 
   @ValidateIf((dto) => dto.type === 'MANUAL')
   @IsString()

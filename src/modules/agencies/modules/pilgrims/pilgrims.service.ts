@@ -44,6 +44,7 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
           district_id: dto.district_id,
           user_id: newUser.id,
           agency_id: user.agency_id,
+          pinfl: dto.pinfl,
         } as Partial<Pilgrim>,
         t,
       );

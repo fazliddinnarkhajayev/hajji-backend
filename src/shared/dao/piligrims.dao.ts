@@ -76,6 +76,11 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
     return record as Pilgrim | undefined;
   }
 
+  async findByPinfl(pinfl: string, trx?: Knex.Transaction): Promise<Pilgrim | undefined> {
+    const record = await this.qb(trx).where({ pinfl, is_deleted: false }).first();
+    return record as Pilgrim | undefined;
+  }
+
   async updateLanguage(
     id: string,
     language: string,

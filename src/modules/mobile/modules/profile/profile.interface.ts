@@ -5,6 +5,7 @@ export interface UserProfile {
   last_name: string | null;
   middle_name: string | null;
   phone: string | null;
+  pinfl: string | null;
   email: string | null;
   avatar_url: string | null;
   language: string;

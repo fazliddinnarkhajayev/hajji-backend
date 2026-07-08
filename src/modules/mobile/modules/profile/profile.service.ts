@@ -109,6 +109,7 @@ export class ProfileService {
       last_name: pilgrim.last_name || null,
       middle_name: pilgrim.middle_name || null,
       phone: pilgrim.phone || null,
+      pinfl: pilgrim.pinfl || null,
       email: pilgrim.email || null,
       avatar_url: pilgrim.avatar_url || null,
       language: pilgrim.language || 'uz',

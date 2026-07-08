@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   Logger,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -32,6 +33,7 @@ import { CountriesDao } from "../references/modules/countries/countries.dao";
 import { RegionsDao } from "../references/modules/regions/regions.dao";
 import { DistrictsDao } from "../references/modules/districts/districts.dao";
 import { SundryService } from "../../shared/services/sundry.service";
+import { SmsService } from "../../shared/services/sms.service";
 import { randomUUID } from "crypto";
 
 export interface JwtPayload {
@@ -64,6 +66,7 @@ export class AuthService {
     private readonly regionsDao: RegionsDao,
     private readonly districtsDao: DistrictsDao,
     private readonly sundryService: SundryService,
+    private readonly smsService: SmsService,
   ) { }
 
   // ===================== Admin Login =====================
@@ -250,8 +253,22 @@ export class AuthService {
       expiresAt,
     );
 
-    // TODO: Send OTP via SMS or Telegram (mock for now)
-    console.log(`OTP sent to ${phone}: ${code} via ${dto.method}`);
+    // Deliver the code via the requested channel.
+    const isDev = this.configService.get<string>("NODE_ENV") !== "production";
+    const sent =
+      dto.method === "TELEGRAM"
+        ? await this.smsService.sendTgVerificationCode(phone, code)
+        : await this.smsService.sendOtp(phone, code);
+
+    if (!sent) {
+      // In development, log the code so the flow is testable without a live
+      // SMS/Telegram provider; in production, fail loudly.
+      if (isDev) {
+        this.logger.warn(`[DEV] OTP for ${phone}: ${code} (delivery via ${dto.method} not configured)`);
+      } else {
+        throw new InternalServerErrorException("Failed to send verification code");
+      }
+    }
 
     return { success: true, expires_in_minutes: expiryMinutes };
   }
@@ -365,9 +382,9 @@ export class AuthService {
   private async registerPilgrimManual(
     dto: RegisterDto,
   ): Promise<{ access_token: string; refresh_token: string; user: any }> {
-    if (!dto.first_name || !dto.last_name || !dto.phone || !dto.country_id) {
+    if (!dto.first_name || !dto.last_name || !dto.phone || !dto.pinfl || !dto.password || !dto.country_id) {
       throw new BadRequestException(
-        "Missing required fields: first_name, last_name, phone, country_id",
+        "Missing required fields: first_name, last_name, phone, pinfl, password, country_id",
       );
     }
 
@@ -378,6 +395,12 @@ export class AuthService {
       const existingUser = await this.usersAuthDao.findUserBy({ username: phone }, trx);
       if (existingUser) {
         throw new ConflictException("Phone number is already registered");
+      }
+
+      // Check if a pilgrim with this PINFL already exists
+      const existingPinfl = await this.pilgrimsDao.findByPinfl(dto.pinfl, trx);
+      if (existingPinfl) {
+        throw new ConflictException("PINFL is already registered");
       }
 
       // Validate country exists
@@ -403,11 +426,12 @@ export class AuthService {
       }
 
       // Create user: username = phone, type = PILGRIM
+      const passwordHash = this.sundryService.generateHashPassword(dto.password);
       const user = await this.usersAuthDao.createUser(
         "PILGRIM",
         phone,
         phone, // username = phone
-        null,
+        passwordHash,
         trx,        dto.language ?? null,      );
 
       // Create pilgrim profile
@@ -418,6 +442,7 @@ export class AuthService {
         last_name: dto.last_name,
         middle_name: dto.middle_name ?? null,
         phone,
+        pinfl: dto.pinfl,
         country_id: dto.country_id,
         region_id: dto.region_id ?? null,
         district_id: dto.district_id ?? null,
