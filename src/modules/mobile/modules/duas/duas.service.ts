@@ -3,20 +3,10 @@ import {
   DuasService,
   DuaWithTranslations,
 } from 'src/modules/references/modules/duas/duas.service';
-import {
-  CONTENT_LANGUAGES,
-  DEFAULT_CONTENT_LANGUAGE,
-  ContentLanguage,
-} from 'src/shared/constants';
+import { CONTENT_LANGUAGES } from 'src/shared/constants';
 
-/** Flattened, single-language dua as consumed by the mobile app / offline DB. */
-export interface MobileDua {
-  id: string;
-  category: string;
-  order: number | null;
-  text_ar: string;
-  reference: string | null;
-  audio_url: string | null;
+/** One language's text for a dua. */
+export interface MobileDuaTranslation {
   lang: string;
   name: string | null;
   situation: string | null;
@@ -25,29 +15,29 @@ export interface MobileDua {
   context: string | null;
 }
 
+/** A dua with ALL its translations — the offline download shape. */
+export interface MobileDuaFull {
+  id: string;
+  category: string;
+  order: number | null;
+  text_ar: string;
+  reference: string | null;
+  audio_url: string | null;
+  translations: MobileDuaTranslation[];
+}
+
 export interface MobileDuasPayload {
-  lang: string;
   count: number;
   version: string | null;
-  items: MobileDua[];
+  langs: string[];
+  items: MobileDuaFull[];
 }
 
 @Injectable()
 export class MobileDuasService {
   constructor(private readonly duasService: DuasService) {}
 
-  private resolveLang(lang?: string): ContentLanguage {
-    return (CONTENT_LANGUAGES as readonly string[]).includes(lang ?? '')
-      ? (lang as ContentLanguage)
-      : DEFAULT_CONTENT_LANGUAGE;
-  }
-
-  private flatten(dua: DuaWithTranslations, lang: ContentLanguage): MobileDua {
-    const t =
-      dua.translations.find((x) => x.lang === lang) ??
-      dua.translations.find((x) => x.lang === DEFAULT_CONTENT_LANGUAGE) ??
-      dua.translations[0];
-
+  private toFull(dua: DuaWithTranslations): MobileDuaFull {
     return {
       id: dua.id,
       category: dua.category,
@@ -55,12 +45,14 @@ export class MobileDuasService {
       text_ar: dua.arabic,
       reference: dua.reference ?? null,
       audio_url: dua.audio_url ?? null,
-      lang: t?.lang ?? lang,
-      name: t?.title ?? null,
-      situation: t?.situation ?? null,
-      transliteration: t?.transliteration ?? null,
-      translation: t?.translation ?? null,
-      context: t?.context ?? null,
+      translations: dua.translations.map((t) => ({
+        lang: t.lang,
+        name: t.title ?? null,
+        situation: t.situation ?? null,
+        transliteration: t.transliteration ?? null,
+        translation: t.translation ?? null,
+        context: t.context ?? null,
+      })),
     };
   }
 
@@ -76,21 +68,19 @@ export class MobileDuasService {
     return max > 0 ? new Date(max).toISOString() : null;
   }
 
-  async findAll(langInput?: string): Promise<MobileDuasPayload> {
-    const lang = this.resolveLang(langInput);
+  async findAll(): Promise<MobileDuasPayload> {
     const duas = await this.duasService.findAllWithTranslations();
     return {
-      lang,
       count: duas.length,
       version: this.computeVersion(duas),
-      items: duas.map((d) => this.flatten(d, lang)),
+      langs: [...CONTENT_LANGUAGES],
+      items: duas.map((d) => this.toFull(d)),
     };
   }
 
-  async findOne(id: string, langInput?: string): Promise<MobileDua> {
-    const lang = this.resolveLang(langInput);
+  async findOne(id: string): Promise<MobileDuaFull> {
     const dua = await this.duasService.findOneWithTranslations(id);
     if (!dua) throw new NotFoundException('Dua not found');
-    return this.flatten(dua, lang);
+    return this.toFull(dua);
   }
 }

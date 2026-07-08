@@ -1,11 +1,11 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { MobileDuasService } from './duas.service';
 import { IsPublic } from 'src/shared/decorators';
 
 /**
  * Read-only dua content for the hajji-guide mobile app. Public — content is
- * not user-specific. `lang` selects the pilgrim's display language; Arabic
- * (`text_ar`) is always included.
+ * not user-specific. Returns every dua with ALL its translations so the app
+ * can download once and switch language offline without re-downloading.
  */
 @Controller('mobile/duas')
 export class MobileDuasController {
@@ -13,13 +13,13 @@ export class MobileDuasController {
 
   @IsPublic()
   @Get()
-  findAll(@Query('lang') lang?: string) {
-    return this.duasService.findAll(lang);
+  findAll() {
+    return this.duasService.findAll();
   }
 
   @IsPublic()
   @Get(':id')
-  findOne(@Param('id') id: string, @Query('lang') lang?: string) {
-    return this.duasService.findOne(id, lang);
+  findOne(@Param('id') id: string) {
+    return this.duasService.findOne(id);
   }
 }
