@@ -1,10 +1,14 @@
-import { IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { DuaTranslationDto } from './dua-translation.dto';
 
 export class UpdateDuaDto {
-  @IsOptional()
-  @IsString()
-  title?: string;
-
   @IsOptional()
   @IsString()
   category?: string;
@@ -15,21 +19,21 @@ export class UpdateDuaDto {
 
   @IsOptional()
   @IsString()
-  transliteration?: string;
-
-  @IsOptional()
-  @IsString()
-  translation?: string;
-
-  @IsOptional()
-  @IsString()
   reference?: string;
 
   @IsOptional()
   @IsString()
-  virtue?: string;
+  audio_url?: string;
 
   @IsOptional()
-  @IsString()
-  audio_url?: string;
+  @IsInt()
+  sort_order?: number;
+
+  // When provided, each entry is upserted for its language. Languages not
+  // included are left untouched.
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DuaTranslationDto)
+  translations?: DuaTranslationDto[];
 }
