@@ -53,6 +53,16 @@ export interface Pilgrim {
     name?: string;
   } | null;
   group_id?: string | null;
+  group?: {
+    id?: string;
+    name?: string;
+    departure_date?: Date | string | null;
+    return_date?: Date | string | null;
+    meeting_point?: string | null;
+    status?: string | null;
+    guide_name?: string | null;
+    guide_phone?: string | null;
+  } | null;
 }
 
 @Injectable()
@@ -120,6 +130,8 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
       .leftJoin(TABLE_NAMES.GROUP_MEMBERS, `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`, `${TABLE_NAMES.PILGRIMS}.id`)
+      .leftJoin(`${TABLE_NAMES.GROUPS} as grp`, 'grp.id', `${TABLE_NAMES.GROUP_MEMBERS}.group_id`)
+      .leftJoin(`${TABLE_NAMES.PILGRIMS} as guide`, 'guide.id', 'grp.guide_pilgrim_id')
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.COUNTRIES}.id, 'name', ${TABLE_NAMES.COUNTRIES}.name, 'soato', ${TABLE_NAMES.COUNTRIES}.soato) as country`),
@@ -127,6 +139,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
         `${TABLE_NAMES.GROUP_MEMBERS}.group_id`,
+        this.db.raw(`CASE WHEN grp.id IS NULL THEN NULL ELSE json_build_object('id', grp.id, 'name', grp.name, 'departure_date', grp.departure_date, 'return_date', grp.return_date, 'meeting_point', grp.meeting_point, 'status', grp.status, 'guide_name', NULLIF(TRIM(CONCAT_WS(' ', guide.first_name, guide.middle_name, guide.last_name)), ''), 'guide_phone', guide.phone) END as "group"`),
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.user_id`]: userId, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })
       .first();
@@ -141,6 +154,8 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
       .leftJoin(TABLE_NAMES.GROUP_MEMBERS, `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`, `${TABLE_NAMES.PILGRIMS}.id`)
+      .leftJoin(`${TABLE_NAMES.GROUPS} as grp`, 'grp.id', `${TABLE_NAMES.GROUP_MEMBERS}.group_id`)
+      .leftJoin(`${TABLE_NAMES.PILGRIMS} as guide`, 'guide.id', 'grp.guide_pilgrim_id')
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.COUNTRIES}.id, 'name', ${TABLE_NAMES.COUNTRIES}.name, 'soato', ${TABLE_NAMES.COUNTRIES}.soato) as country`),
@@ -148,6 +163,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
         `${TABLE_NAMES.GROUP_MEMBERS}.group_id`,
+        this.db.raw(`CASE WHEN grp.id IS NULL THEN NULL ELSE json_build_object('id', grp.id, 'name', grp.name, 'departure_date', grp.departure_date, 'return_date', grp.return_date, 'meeting_point', grp.meeting_point, 'status', grp.status, 'guide_name', NULLIF(TRIM(CONCAT_WS(' ', guide.first_name, guide.middle_name, guide.last_name)), ''), 'guide_phone', guide.phone) END as "group"`),
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.id`]: id, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })
       .first();

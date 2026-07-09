@@ -39,6 +39,16 @@ export interface UserProfile {
     name?: string;
   } | null;
   group_id?: string | null;
+  group?: {
+    id?: string;
+    name?: string;
+    departure_date?: Date | string | null;
+    return_date?: Date | string | null;
+    meeting_point?: string | null;
+    status?: string | null;
+    guide_name?: string | null;
+    guide_phone?: string | null;
+  } | null;
 }
 
 export interface UserProfileSettings {

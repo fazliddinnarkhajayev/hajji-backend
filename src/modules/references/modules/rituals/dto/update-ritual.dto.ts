@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { RitualTranslationDto } from './ritual-translation.dto';
+import { RitualSubstepDto } from './ritual-substep.dto';
 
 export class UpdateRitualDto {
   @IsOptional()
@@ -37,4 +38,11 @@ export class UpdateRitualDto {
   @ValidateNested({ each: true })
   @Type(() => RitualTranslationDto)
   translations?: RitualTranslationDto[];
+
+  // When provided, replaces all sub-steps (e.g. Tawaf circuits) of this ritual.
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RitualSubstepDto)
+  substeps?: RitualSubstepDto[];
 }

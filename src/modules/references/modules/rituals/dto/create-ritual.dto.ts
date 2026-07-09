@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { RitualTranslationDto } from './ritual-translation.dto';
+import { RitualSubstepDto } from './ritual-substep.dto';
 
 export class CreateRitualDto {
   @IsIn(['umrah', 'hajj'])
@@ -35,4 +36,12 @@ export class CreateRitualDto {
   @ValidateNested({ each: true })
   @Type(() => RitualTranslationDto)
   translations?: RitualTranslationDto[];
+
+  // Sub-steps (e.g. Tawaf circuits). When provided, they replace all existing
+  // sub-steps of this ritual.
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RitualSubstepDto)
+  substeps?: RitualSubstepDto[];
 }

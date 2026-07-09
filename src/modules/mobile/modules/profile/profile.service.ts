@@ -128,6 +128,7 @@ export class ProfileService {
       district: pilgrim.district,
       agency: pilgrim.agency,
       group_id: pilgrim.group_id ?? null,
+      group: pilgrim.group ?? null,
     };
   }
 

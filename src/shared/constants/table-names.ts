@@ -24,6 +24,8 @@ export const TABLE_NAMES = {
   DUA_TRANSLATIONS: 'dua_translations',
   RITUALS: 'rituals',
   RITUAL_TRANSLATIONS: 'ritual_translations',
+  RITUAL_SUBSTEPS: 'ritual_substeps',
+  RITUAL_SUBSTEP_TRANSLATIONS: 'ritual_substep_translations',
   GROUP_PLANS: 'group_plans',
   GROUP_PLAN_PROCEDURES: 'group_plan_procedures',
   GROUP_PLAN_CONFIRMATIONS: 'group_plan_confirmations',
