@@ -13,6 +13,7 @@ export const TABLE_NAMES = {
   LOCATIONS: 'locations',
   LOCATION_TRANSLATIONS: 'location_translations',
   PILGRIM_AGENCY_HISTORY: 'pilgrim_agency_history',
+  PILGRIM_DELETE_REQUESTS: 'pilgrim_delete_requests',
   INVITATIONS: 'invitations',
   GROUPS: 'groups',
   GROUP_MEMBERS: 'group_members',

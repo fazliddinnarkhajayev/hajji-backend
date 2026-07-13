@@ -1,11 +1,12 @@
 import { Injectable } from "@nestjs/common";
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { Knex } from "knex";
 import { BaseService } from "src/shared/services/base.service";
 import { UserTypesEnum } from "src/shared/enums/user-types.enum";
 import { UsersService } from "src/modules/users/users.service";
 import { Pilgrim, PilgrimsDao } from "src/shared/dao/piligrims.dao";
 import { PilgrimAgencyHistoryDao } from "src/shared/dao/pilgrim-agency-history.dao";
+import { PilgrimDeleteRequestDao, PilgrimDeleteRequest } from "src/shared/dao/pilgrim-delete-request.dao";
 import { CreatePilgrimDto } from "./dto/create-pilgrim.dto";
 import { PaginatedResult } from "src/shared/interfaces/pagination.interface";
 import { SundryService } from "src/shared/services/sundry.service";
@@ -15,10 +16,48 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   constructor(
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly historyDao: PilgrimAgencyHistoryDao,
+    private readonly deleteRequestDao: PilgrimDeleteRequestDao,
     private readonly usersService: UsersService,
     private readonly sundryService: SundryService,
   ) {
     super(pilgrimsDao);
+  }
+
+  /** Paginated list of pending account-deletion requests (joined to pilgrim). */
+  async listDeleteRequests(
+    pageIndex: number = 1,
+    pageSize: number = 10,
+  ): Promise<PaginatedResult<PilgrimDeleteRequest>> {
+    return this.deleteRequestDao.findPendingPaginated(pageIndex, pageSize);
+  }
+
+  /**
+   * Approve a pending deletion request: soft-delete the pilgrim and mark the
+   * request APPROVED. Runs in a single transaction.
+   */
+  async approveDeleteRequest(id: string, user: any): Promise<PilgrimDeleteRequest> {
+    const run = async (t: Knex.Transaction) => {
+      const request = await this.deleteRequestDao.findByIdActive(id, t);
+      if (!request) {
+        throw new NotFoundException('Pending delete request not found');
+      }
+
+      await this.pilgrimsDao.deleteById(request.pilgrim_id, t);
+
+      const updated = await this.deleteRequestDao.updateById(
+        id,
+        {
+          status: 'APPROVED',
+          reviewed_by_id: user.id,
+          reviewed_at: new Date(),
+          updated_at: new Date(),
+        },
+        t,
+      );
+      return updated as PilgrimDeleteRequest;
+    };
+
+    return this.transaction(run);
   }
 
   async create(dto: CreatePilgrimDto, user: any): Promise<Pilgrim> {
