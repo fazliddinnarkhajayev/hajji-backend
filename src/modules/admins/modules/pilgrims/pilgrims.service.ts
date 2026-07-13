@@ -23,12 +23,15 @@ export class PilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     super(pilgrimsDao);
   }
 
-  /** Paginated list of pending account-deletion requests (joined to pilgrim). */
+  /**
+   * Paginated list of account-deletion requests (pending ones plus cancelled /
+   * approved history), joined to pilgrim.
+   */
   async listDeleteRequests(
     pageIndex: number = 1,
     pageSize: number = 10,
   ): Promise<PaginatedResult<PilgrimDeleteRequest>> {
-    return this.deleteRequestDao.findPendingPaginated(pageIndex, pageSize);
+    return this.deleteRequestDao.findPaginated(pageIndex, pageSize);
   }
 
   /**

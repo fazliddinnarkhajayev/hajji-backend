@@ -57,8 +57,12 @@ export class PilgrimDeleteRequestDao extends BaseDao<PilgrimDeleteRequest> {
     return record as PilgrimDeleteRequest | undefined;
   }
 
-  /** Paginated list of PENDING requests, joined to the requesting pilgrim. */
-  async findPendingPaginated(
+  /**
+   * Paginated list of ALL requests (PENDING acted-on ones plus CANCELLED /
+   * APPROVED history), joined to the requesting pilgrim. PENDING first, then
+   * newest-first, so actionable requests stay on top while history is retained.
+   */
+  async findPaginated(
     pageIndex: number = 1,
     pageSize: number = 10,
     trx?: Knex.Transaction,
@@ -66,7 +70,7 @@ export class PilgrimDeleteRequestDao extends BaseDao<PilgrimDeleteRequest> {
     const offset = (pageIndex - 1) * pageSize;
 
     const [{ count }] = await this.qb(trx)
-      .where({ [`${this.tableName}.status`]: 'PENDING', [`${this.tableName}.is_deleted`]: false })
+      .where({ [`${this.tableName}.is_deleted`]: false })
       .whereNull(`${this.tableName}.deleted_at`)
       .count('* as count');
 
@@ -86,8 +90,9 @@ export class PilgrimDeleteRequestDao extends BaseDao<PilgrimDeleteRequest> {
           'pinfl', ${TABLE_NAMES.PILGRIMS}.pinfl
         ) as pilgrim`),
       )
-      .where({ [`${this.tableName}.status`]: 'PENDING', [`${this.tableName}.is_deleted`]: false })
+      .where({ [`${this.tableName}.is_deleted`]: false })
       .whereNull(`${this.tableName}.deleted_at`)
+      .orderByRaw(`CASE WHEN ${this.tableName}.status = 'PENDING' THEN 0 ELSE 1 END`)
       .orderBy(`${this.tableName}.created_at`, 'desc')
       .limit(pageSize)
       .offset(offset);
