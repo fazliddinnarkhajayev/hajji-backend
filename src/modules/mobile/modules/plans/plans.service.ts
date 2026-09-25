@@ -344,7 +344,7 @@ export class MobilePlansService {
         confirmed_at: at,
       } as any);
     } catch (e: any) {
-      // Lost a race with a concurrent replay (unique index, migration 048).
+      // Lost a race with a concurrent replay (unique index, migration 065).
       if (e?.code === PG_UNIQUE_VIOLATION) return { success: true, already: true };
       throw e;
     }
