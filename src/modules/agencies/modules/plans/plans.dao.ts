@@ -104,6 +104,14 @@ export class PlanConfirmationsDao extends BaseDao<PlanConfirmation> {
       .orderBy('confirmed_at', 'asc') as Promise<PlanConfirmation[]>;
   }
 
+  async findByProcedureIds(procedureIds: string[], trx?: Knex.Transaction): Promise<PlanConfirmation[]> {
+    if (!procedureIds.length) return [];
+    return this.qb(trx)
+      .whereIn('procedure_id', procedureIds)
+      .andWhere({ is_deleted: false })
+      .orderBy('confirmed_at', 'asc') as Promise<PlanConfirmation[]>;
+  }
+
   async findByProcedureAndUser(
     procedureId: string,
     userId: string,

@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import {
   GroupPlansDao, PlanProceduresDao, PlanConfirmationsDao,
@@ -16,6 +17,61 @@ export interface MobilePlanResponse {
   today_procedures: (PlanProcedure & { confirmations: PlanConfirmation[] })[];
   tomorrow_procedures: (PlanProcedure & { confirmations: PlanConfirmation[] })[] | null;
 }
+
+/** Full plan for offline use (GET /mobile/plans/offline). */
+export interface MobileOfflinePlanResponse {
+  plan: {
+    id: string;
+    name: string;
+    description: string | null;
+    total_days: number;
+    start_date: string | null;
+    procedures: {
+      id: string;
+      day_index: number;
+      order_index: number;
+      title: string;
+      meeting_time: string;
+      duration_minutes: number;
+      location: string | null;
+      requires_confirmation: boolean;
+      confirmation_by: string | null;
+      confirmations: {
+        id: string;
+        confirmed_by_user_id: string;
+        confirmed_by_type: 'PILGRIM' | 'GUIDE';
+        comment: string | null;
+        confirmed_at: string | null;
+      }[];
+    }[];
+  } | null;
+  reason: 'NO_GROUP' | 'NO_PLAN' | null;
+  is_guide: boolean;
+  /** Pilgrim id of the caller; matches `confirmed_by_user_id`. */
+  me: string;
+  /** Changes whenever anything in the payload changes. */
+  version: string;
+}
+
+/** Offline confirmations may be replayed late, but never from the future. */
+const CONFIRM_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+const PG_UNIQUE_VIOLATION = '23505';
+
+/** Date column → "YYYY-MM-DD" (pg returns DATE as a local-midnight Date). */
+function toYMD(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+const toIso = (value: Date | string | null | undefined): string | null =>
+  value ? new Date(value).toISOString() : null;
 
 @Injectable()
 export class MobilePlansService {
@@ -141,18 +197,116 @@ export class MobilePlansService {
     };
   }
 
+  /** Resolves the caller's pilgrim row and group id (null when not in a group). */
+  private async resolveMember(userId: string) {
+    const pilgrim = await this.pilgrimsDao.findByUserIdWithJoins(userId);
+    if (!pilgrim) throw new NotFoundException('Pilgrim profile not found');
+    const membership = await this.groupMembersDao.findByPilgrimId(pilgrim.id);
+    return { pilgrim, groupId: membership?.group_id ?? null };
+  }
+
+  /** Same choice as getCurrentPlan: prefer a plan with start_date. */
+  private async pickPlan(groupId: string): Promise<GroupPlan | null> {
+    const plans = await this.plansDao.findByGroupId(groupId);
+    return plans.find(p => p.start_date) ?? plans[0] ?? null;
+  }
+
+  /** Throws unless the procedure belongs to a live plan of `groupId`. */
+  private async assertProcedureInGroup(procedure: PlanProcedure, groupId: string | null): Promise<GroupPlan> {
+    const plan = await this.plansDao.findById(procedure.plan_id);
+    if (!plan || plan.is_deleted || !groupId || plan.group_id !== groupId) {
+      throw new ForbiddenException('This procedure is not in your group plan');
+    }
+    return plan;
+  }
+
+  private version(body: object): string {
+    return createHash('sha1').update(JSON.stringify(body)).digest('hex');
+  }
+
+  /**
+   * The whole plan (every day) with confirmations, for the app to store and
+   * show offline. "No group" / "no plan" are states, not errors.
+   */
+  async getOfflinePlan(userId: string): Promise<MobileOfflinePlanResponse> {
+    const { pilgrim, groupId } = await this.resolveMember(userId);
+    const base = { is_guide: pilgrim.is_guide ?? false, me: pilgrim.id };
+
+    const plan = groupId ? await this.pickPlan(groupId) : null;
+    if (!plan) {
+      const body = { ...base, plan: null, reason: groupId ? ('NO_PLAN' as const) : ('NO_GROUP' as const) };
+      return { ...body, version: this.version(body) };
+    }
+
+    const procedures = await this.proceduresDao.findByPlanId(plan.id);
+    const confirmations = await this.confirmationsDao.findByProcedureIds(procedures.map(p => p.id));
+    const byProcedure = new Map<string, PlanConfirmation[]>();
+    for (const c of confirmations) {
+      const list = byProcedure.get(c.procedure_id) ?? [];
+      list.push(c);
+      byProcedure.set(c.procedure_id, list);
+    }
+
+    const body = {
+      ...base,
+      reason: null,
+      plan: {
+        id: plan.id,
+        name: plan.name,
+        description: plan.description ?? null,
+        total_days: plan.total_days,
+        start_date: toYMD(plan.start_date),
+        procedures: procedures.map(p => ({
+          id: p.id,
+          day_index: p.day_index,
+          order_index: p.order_index,
+          title: p.title,
+          meeting_time: p.meeting_time,
+          duration_minutes: p.duration_minutes,
+          location: p.location ?? null,
+          requires_confirmation: !!p.requires_confirmation,
+          confirmation_by: p.confirmation_by ?? null,
+          confirmations: (byProcedure.get(p.id) ?? []).map(c => ({
+            id: c.id,
+            confirmed_by_user_id: c.confirmed_by_user_id,
+            confirmed_by_type: c.confirmed_by_type,
+            comment: c.comment ?? null,
+            confirmed_at: toIso(c.confirmed_at),
+          })),
+        })),
+      },
+    };
+    return { ...body, version: this.version(body) };
+  }
+
+  /** Guide: the group roster once (confirmations already come with the plan). */
+  async getGroupRoster(userId: string) {
+    const { pilgrim, groupId } = await this.resolveMember(userId);
+    if (!pilgrim.is_guide) throw new ForbiddenException('Only guides can view the group roster');
+    if (!groupId) return { members: [] };
+    const members = await this.groupMembersDao.getGroupMembersWithDetailsPaginated(groupId, 1, 500);
+    return {
+      members: members.records.map(m => ({
+        pilgrim_id: m.pilgrim_id,
+        full_name: m.full_name,
+        phone: m.phone ?? null,
+      })),
+    };
+  }
+
   async confirmProcedure(
     userId: string,
     procedureId: string,
     comment?: string,
-  ): Promise<{ success: boolean }> {
-    const pilgrim = await this.pilgrimsDao.findByUserIdWithJoins(userId);
-    if (!pilgrim) throw new NotFoundException('Pilgrim profile not found');
+    confirmedAt?: string,
+  ): Promise<{ success: boolean; already?: boolean }> {
+    const { pilgrim, groupId } = await this.resolveMember(userId);
 
     const confirmedByType = (pilgrim.is_guide ? 'GUIDE' : 'PILGRIM') as 'GUIDE' | 'PILGRIM';
 
     const procedure = await this.proceduresDao.findById(procedureId);
-    if (!procedure) throw new NotFoundException('Procedure not found');
+    if (!procedure || procedure.is_deleted) throw new NotFoundException('Procedure not found');
+    await this.assertProcedureInGroup(procedure, groupId);
 
     if (!procedure.requires_confirmation) {
       throw new BadRequestException('This procedure does not require confirmation');
@@ -163,33 +317,49 @@ export class MobilePlansService {
       throw new BadRequestException(`Only ${cb} can confirm this procedure`);
     }
 
+    // Offline confirmations arrive late: keep the device time, never a future one.
+    let at = new Date();
+    if (confirmedAt) {
+      const clientAt = new Date(confirmedAt);
+      if (Number.isNaN(clientAt.getTime()) || clientAt.getTime() > Date.now() + CONFIRM_CLOCK_SKEW_MS) {
+        throw new BadRequestException('confirmed_at is invalid');
+      }
+      at = clientAt;
+    }
+
+    // Idempotent: the app may replay the same confirmation.
     const existing = await this.confirmationsDao.findByProcedureAndUser(
       procedureId,
       pilgrim.id,
       confirmedByType,
     );
-    if (existing) throw new BadRequestException('You have already confirmed this procedure');
+    if (existing) return { success: true, already: true };
 
-    await this.confirmationsDao.insert({
-      procedure_id: procedureId,
-      confirmed_by_user_id: pilgrim.id,
-      confirmed_by_type: confirmedByType,
-      comment: comment ?? null,
-      confirmed_at: new Date(),
-    } as any);
+    try {
+      await this.confirmationsDao.insert({
+        procedure_id: procedureId,
+        confirmed_by_user_id: pilgrim.id,
+        confirmed_by_type: confirmedByType,
+        comment: comment ?? null,
+        confirmed_at: at,
+      } as any);
+    } catch (e: any) {
+      // Lost a race with a concurrent replay (unique index, migration 048).
+      if (e?.code === PG_UNIQUE_VIOLATION) return { success: true, already: true };
+      throw e;
+    }
 
     return { success: true };
   }
 
   async getGroupMembersForGuide(userId: string, procedureId: string) {
-    const pilgrim = await this.pilgrimsDao.findByUserIdWithJoins(userId);
-    if (!pilgrim || !pilgrim.is_guide) throw new BadRequestException('Only guides can view member status');
+    const { pilgrim, groupId } = await this.resolveMember(userId);
+    if (!pilgrim.is_guide) throw new BadRequestException('Only guides can view member status');
 
     const procedure = await this.proceduresDao.findById(procedureId);
     if (!procedure) throw new NotFoundException('Procedure not found');
 
-    const plan = await this.plansDao.findById(procedure.plan_id);
-    if (!plan) throw new NotFoundException('Plan not found');
+    const plan = await this.assertProcedureInGroup(procedure, groupId);
 
     const members = await this.groupMembersDao.getGroupMembersWithDetailsPaginated(plan.group_id, 1, 500);
     const confirmations = await this.confirmationsDao.findByProcedureId(procedureId);

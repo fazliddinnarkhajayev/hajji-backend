@@ -15,13 +15,25 @@ export class MobilePlansController {
     return this.service.getCurrentPlan(user.user_id, localDate);
   }
 
+  /** Whole plan (all days) for offline storage in the app. */
+  @Get('offline')
+  getOffline(@CurrentUser() user: any) {
+    return this.service.getOfflinePlan(user.user_id);
+  }
+
+  /** Guide: group roster, fetched once and cached by the app. */
+  @Get('members')
+  getRoster(@CurrentUser() user: any) {
+    return this.service.getGroupRoster(user.user_id);
+  }
+
   @Post('procedures/:procedureId/confirm')
   confirmProcedure(
     @Param('procedureId') procedureId: string,
     @Body() dto: MobileConfirmProcedureDto,
     @CurrentUser() user: any,
   ) {
-    return this.service.confirmProcedure(user.user_id, procedureId, dto.comment);
+    return this.service.confirmProcedure(user.user_id, procedureId, dto.comment, dto.confirmed_at);
   }
 
   @Get('procedures/:procedureId/members')
