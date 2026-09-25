@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   Logger,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -18,6 +19,7 @@ import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { LogoutDto } from "./dto/logout.dto";
+import { AgencyResetPasswordDto } from "./dto/agency-reset-password.dto";
 import { UsersAuthDao, UserRecord } from "../../shared/dao/users-auth.dao";
 import { AdminsDao } from "../../shared/dao/admins.dao";
 import { OtpSessionsDao } from "../../shared/dao/otp-sessions.dao";
@@ -31,6 +33,7 @@ import { CountriesDao } from "../references/modules/countries/countries.dao";
 import { RegionsDao } from "../references/modules/regions/regions.dao";
 import { DistrictsDao } from "../references/modules/districts/districts.dao";
 import { SundryService } from "../../shared/services/sundry.service";
+import { SmsService } from "../../shared/services/sms.service";
 import { randomUUID } from "crypto";
 
 export interface JwtPayload {
@@ -63,7 +66,8 @@ export class AuthService {
     private readonly regionsDao: RegionsDao,
     private readonly districtsDao: DistrictsDao,
     private readonly sundryService: SundryService,
-  ) { }
+    private readonly smsService: SmsService,
+  ) {}
 
   // ===================== Admin Login =====================
 
@@ -174,6 +178,38 @@ export class AuthService {
     });
   }
 
+  // ===================== Agency User Reset Password =====================
+
+  async agencyResetPassword(
+    user: any,
+    dto: AgencyResetPasswordDto,
+  ): Promise<{ success: boolean }> {
+    if (user.type !== UserTypesEnum.AGENCY_USER) {
+      throw new ForbiddenException("Only agency users can use this endpoint");
+    }
+
+    return this.db.transaction(async (trx) => {
+      const record = await this.usersAuthDao.findUserById(user.id, trx);
+      if (!record) {
+        throw new UnauthorizedException("User not found");
+      }
+
+      if (
+        !record.password_hash ||
+        !(await bcrypt.compare(dto.current_password, record.password_hash))
+      ) {
+        throw new BadRequestException("Current password is incorrect");
+      }
+
+      const passwordHash = this.sundryService.generateHashPassword(
+        dto.new_password,
+      );
+      await this.usersAuthDao.updatePassword(user.id, passwordHash, trx);
+
+      return { success: true };
+    });
+  }
+
   // ===================== Send OTP =====================
 
   async sendOtp(
@@ -181,23 +217,20 @@ export class AuthService {
   ): Promise<{ success: boolean; expires_in_minutes: number }> {
     const phone = this.sundryService.normalizePhone(dto.phone);
 
-    // Validate user exists, is a PILGRIM, and has a pilgrim profile
+    // OTP may be sent to any phone (registered or not) — the register/login
+    // split happens at verify time. If an account already exists, only reject
+    // when it's blocked, deleted, or not a pilgrim account.
     const user = await this.usersAuthDao.findUserBy({ username: phone });
-    if (!user) {
-      throw new BadRequestException("No account found for this phone number");
-    }
-    if (user.type !== UserTypesEnum.PILGRIM) {
-      throw new ForbiddenException("Account is not a pilgrim account");
-    }
-    if (user.is_blocked) {
-      throw new ForbiddenException("User account is blocked");
-    }
-    if (user.deleted_at) {
-      throw new ForbiddenException("User account has been deleted");
-    }
-    const pilgrim = await this.pilgrimsDao.findByUserId(user.id);
-    if (!pilgrim) {
-      throw new BadRequestException("No pilgrim profile found for this account");
+    if (user) {
+      if (user.type !== UserTypesEnum.PILGRIM) {
+        throw new ForbiddenException("Account is not a pilgrim account");
+      }
+      if (user.is_blocked) {
+        throw new ForbiddenException("User account is blocked");
+      }
+      if (user.deleted_at) {
+        throw new ForbiddenException("User account has been deleted");
+      }
     }
 
     // Generate OTP code (6 digits)
@@ -217,8 +250,19 @@ export class AuthService {
       expiresAt,
     );
 
-    // TODO: Send OTP via SMS or Telegram (mock for now)
-    console.log(`OTP sent to ${phone}: ${code} via ${dto.method}`);
+    // Deliver the code via the requested channel.
+    const sent =
+      dto.method === "TELEGRAM"
+        ? await this.smsService.sendTgVerificationCode(phone, code)
+        : await this.smsService.sendOtp(phone, code);
+
+    if (!sent) {
+      // In development, log the code so the flow is testable without a live
+      // SMS/Telegram provider; in production, fail loudly.
+      throw new InternalServerErrorException(
+        "Failed to send verification code",
+      );
+    }
 
     return { success: true, expires_in_minutes: expiryMinutes };
   }
@@ -226,15 +270,17 @@ export class AuthService {
   // ===================== Verify OTP & Auto-Register Pilgrim =====================
 
   async verifyOtp(dto: VerifyOtpDto): Promise<{
-    access_token: string;
-    refresh_token: string;
-    is_new_user: boolean;
+    success: boolean;
+    is_registered: boolean;
+    access_token?: string;
+    refresh_token?: string;
   }> {
     const phone = this.sundryService.normalizePhone(dto.phone);
 
     return this.db.transaction(async (trx) => {
       // TEST BYPASS: Allow test code "123456" to skip OTP verification
       const isTestCode = dto.code === "123456";
+      let sessionId: string | null = null;
 
       if (!isTestCode) {
         // Find latest OTP session
@@ -262,56 +308,34 @@ export class AuthService {
           throw new BadRequestException("OTP has expired");
         }
 
-        // Mark OTP as used
-        await this.otpSessionsDao.verifyOtpSession(otpSession.id, trx);
+        sessionId = otpSession.id;
       } else {
-        // Test mode: log that test code was used
-        this.logger.warn(`TEST MODE: OTP verification bypassed for phone ${phone} with test code`);
+        this.logger.warn(
+          `TEST MODE: OTP verification bypassed for phone ${phone} with test code`,
+        );
       }
 
-      // Find user by phone (username)
+      // Is there a usable registered pilgrim account for this phone?
       const user = await this.usersAuthDao.findUserBy({ username: phone }, trx);
+      const isRegistered =
+        !!user &&
+        user.type === UserTypesEnum.PILGRIM &&
+        !user.is_blocked &&
+        !user.deleted_at &&
+        !!(await this.pilgrimsDao.findByUserId(user.id, trx));
 
-      if (!user) {
-        throw new BadRequestException("No account found for this phone number");
+      if (isRegistered) {
+        // Existing user → log in. Consume the OTP session.
+        if (sessionId) await this.otpSessionsDao.markUsed(sessionId, trx);
+        await this.usersAuthDao.updateLoginAt(user!.id, trx);
+        const tokens = await this.generateTokens(user!.id, "PILGRIM", undefined, trx);
+        return { success: true, is_registered: true, ...tokens };
       }
 
-      // Ensure user is a PILGRIM
-      if (user.type !== UserTypesEnum.PILGRIM) {
-        throw new ForbiddenException("Account is not a pilgrim account");
-      }
-
-      // Check if user is blocked
-      if (user.is_blocked) {
-        throw new ForbiddenException("User account is blocked");
-      }
-
-      // Check if user is deleted
-      if (user.deleted_at) {
-        throw new ForbiddenException("User account has been deleted");
-      }
-
-      // Ensure pilgrim profile exists
-      const pilgrim = await this.pilgrimsDao.findByUserId(user.id, trx);
-      if (!pilgrim) {
-        throw new BadRequestException("No pilgrim profile found for this account");
-      }
-
-      // Update last login
-      await this.usersAuthDao.updateLoginAt(user.id, trx);
-
-      // Generate tokens
-      const tokens = await this.generateTokens(
-        user.id,
-        "PILGRIM",
-        undefined,
-        trx,
-      );
-
-      return {
-        ...tokens,
-        is_new_user: false,
-      };
+      // New user → mark the session VERIFIED so the follow-up registration is
+      // authorized (see registerPilgrimManual's proof-of-OTP check).
+      if (sessionId) await this.otpSessionsDao.markVerified(sessionId, trx);
+      return { success: true, is_registered: false };
     });
   }
 
@@ -332,30 +356,66 @@ export class AuthService {
   private async registerPilgrimManual(
     dto: RegisterDto,
   ): Promise<{ access_token: string; refresh_token: string; user: any }> {
-    if (!dto.first_name || !dto.last_name || !dto.phone || !dto.country_id) {
+    if (
+      !dto.first_name ||
+      !dto.last_name ||
+      !dto.phone ||
+      !dto.pinfl ||
+      !dto.country_id
+    ) {
       throw new BadRequestException(
-        "Missing required fields: first_name, last_name, phone, country_id",
+        "Missing required fields: first_name, last_name, phone, pinfl, country_id",
       );
     }
 
     const phone = this.sundryService.normalizePhone(dto.phone);
+    const isDev = this.configService.get<string>("NODE_ENV") !== "production";
 
     return this.db.transaction(async (trx) => {
+      // Proof-of-OTP: registration is only allowed for a phone that just passed
+      // OTP verification (verify-otp marked a session VERIFIED). In development,
+      // allow it through when no session exists so the flow stays testable.
+      const otpWindowMinutes = 30;
+      const since = new Date(Date.now() - otpWindowMinutes * 60 * 1000);
+      const verifiedSession = await this.otpSessionsDao.findVerifiedByPhone(phone, since, trx);
+      if (!verifiedSession) {
+        if (isDev) {
+          this.logger.warn(`[DEV] register: no verified OTP session for ${phone}, allowing anyway`);
+        } else {
+          throw new BadRequestException("Phone number is not verified. Please verify via OTP first.");
+        }
+      }
+
       // Check if user with this phone already exists
-      const existingUser = await this.usersAuthDao.findUserBy({ username: phone }, trx);
+      const existingUser = await this.usersAuthDao.findUserBy(
+        { username: phone },
+        trx,
+      );
       if (existingUser) {
         throw new ConflictException("Phone number is already registered");
       }
 
+      // Check if a pilgrim with this PINFL already exists
+      const existingPinfl = await this.pilgrimsDao.findByPinfl(dto.pinfl, trx);
+      if (existingPinfl) {
+        throw new ConflictException("PINFL is already registered");
+      }
+
       // Validate country exists
-      const country = await this.countriesDao.findOne({ id: dto.country_id }, trx);
+      const country = await this.countriesDao.findOne(
+        { id: dto.country_id },
+        trx,
+      );
       if (!country) {
         throw new BadRequestException(`Country not found: ${dto.country_id}`);
       }
 
       // Validate region if provided
       if (dto.region_id) {
-        const region = await this.regionsDao.findOne({ id: dto.region_id } as any, trx);
+        const region = await this.regionsDao.findOne(
+          { id: dto.region_id } as any,
+          trx,
+        );
         if (!region) {
           throw new BadRequestException(`Region not found: ${dto.region_id}`);
         }
@@ -363,37 +423,52 @@ export class AuthService {
 
       // Validate district if provided
       if (dto.district_id) {
-        const district = await this.districtsDao.findOne({ id: dto.district_id } as any, trx);
+        const district = await this.districtsDao.findOne(
+          { id: dto.district_id } as any,
+          trx,
+        );
         if (!district) {
-          throw new BadRequestException(`District not found: ${dto.district_id}`);
+          throw new BadRequestException(
+            `District not found: ${dto.district_id}`,
+          );
         }
       }
 
-      // Create user: username = phone, type = PILGRIM
+      // Create user: username = phone, type = PILGRIM. Pilgrims authenticate via
+      // OTP only, so no password is stored.
       const user = await this.usersAuthDao.createUser(
         "PILGRIM",
         phone,
         phone, // username = phone
         null,
-        trx,        dto.language ?? null,      );
+        trx,
+        dto.language ?? null,
+      );
 
       // Create pilgrim profile
-      const pilgrim = await this.pilgrimsDao.insert({
-        id: randomUUID(),
-        user_id: user.id,
-        first_name: dto.first_name,
-        last_name: dto.last_name,
-        middle_name: dto.middle_name ?? null,
-        phone,
-        country_id: dto.country_id,
-        region_id: dto.region_id ?? null,
-        district_id: dto.district_id ?? null,
-        is_blocked: false,
-        created_by_id: user.id,
-        created_at: new Date(),
-        updated_at: new Date(),
-        is_deleted: false,
-      } as any, trx);
+      const pilgrim = await this.pilgrimsDao.insert(
+        {
+          id: randomUUID(),
+          user_id: user.id,
+          first_name: dto.first_name,
+          last_name: dto.last_name,
+          middle_name: dto.middle_name ?? null,
+          phone,
+          pinfl: dto.pinfl,
+          country_id: dto.country_id,
+          region_id: dto.region_id ?? null,
+          district_id: dto.district_id ?? null,
+          is_blocked: false,
+          created_by_id: user.id,
+          created_at: new Date(),
+          updated_at: new Date(),
+          is_deleted: false,
+        } as any,
+        trx,
+      );
+
+      // Consume the OTP session so it can't be reused for another registration.
+      if (verifiedSession) await this.otpSessionsDao.markUsed(verifiedSession.id, trx);
 
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
@@ -488,9 +563,11 @@ export class AuthService {
 
   // ===================== Refresh Token =====================
 
-  async refreshToken(dto: RefreshTokenDto): Promise<{ access_token: string }> {
+  async refreshToken(
+    dto: RefreshTokenDto,
+  ): Promise<{ access_token: string; refresh_token: string }> {
     return this.db.transaction(async (trx) => {
-      this.logger.log('refreshToken: looking up refresh token in DB');
+      this.logger.log("refreshToken: looking up refresh token in DB");
 
       const refreshTokenRecord = await this.refreshTokensDao.findRefreshToken(
         dto.refresh_token,
@@ -498,14 +575,18 @@ export class AuthService {
       );
 
       if (!refreshTokenRecord) {
-        this.logger.warn('refreshToken: token not found in DB');
+        this.logger.warn("refreshToken: token not found in DB");
         throw new UnauthorizedException("Invalid or expired refresh token");
       }
 
-      this.logger.log(`refreshToken: found record id=${refreshTokenRecord.id} user_id=${refreshTokenRecord.user_id} is_revoked=${refreshTokenRecord.is_revoked} expires_at=${refreshTokenRecord.expires_at}`);
+      this.logger.log(
+        `refreshToken: found record id=${refreshTokenRecord.id} user_id=${refreshTokenRecord.user_id} is_revoked=${refreshTokenRecord.is_revoked} expires_at=${refreshTokenRecord.expires_at}`,
+      );
 
       if (refreshTokenRecord.is_revoked) {
-        this.logger.warn(`refreshToken: token is revoked — user_id=${refreshTokenRecord.user_id}`);
+        this.logger.warn(
+          `refreshToken: token is revoked — user_id=${refreshTokenRecord.user_id}`,
+        );
         throw new UnauthorizedException("Refresh token has been revoked");
       }
 
@@ -516,34 +597,40 @@ export class AuthService {
             "change_me_refresh",
         });
 
-        this.logger.log(`refreshToken: JWT valid for user_id=${payload.user_id} type=${payload.type}`);
+        this.logger.log(
+          `refreshToken: JWT valid for user_id=${payload.user_id} type=${payload.type}`,
+        );
 
         const user = await this.usersAuthDao.findUserById(payload.user_id, trx);
         if (!user || user.is_blocked || user.deleted_at) {
-          this.logger.warn(`refreshToken: user blocked or deleted — user_id=${payload.user_id} is_blocked=${user?.is_blocked} deleted_at=${user?.deleted_at}`);
+          this.logger.warn(
+            `refreshToken: user blocked or deleted — user_id=${payload.user_id} is_blocked=${user?.is_blocked} deleted_at=${user?.deleted_at}`,
+          );
           throw new ForbiddenException("User is blocked or deleted");
         }
 
-        const accessToken = this.jwtService.sign(
-          {
-            user_id: payload.user_id,
-            type: payload.type,
-            ...(payload.role && { role: payload.role }),
-            ...(payload.agency_id && { agency_id: payload.agency_id }),
-          } as any,
-          {
-            secret:
-              this.configService.get<string>("ACCESS_TOKEN_SECRET") ||
-              "change_me_access",
-            expiresIn:
-              parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") ?? "900", 10),
-          },
+        // Rotate: mint a fresh access+refresh pair via the same path login uses,
+        // then revoke the refresh token that was just spent.
+        const tokens = await this.generateTokens(
+          payload.user_id,
+          payload.type,
+          payload.role,
+          trx,
+          payload.agency_id,
+        );
+        await this.refreshTokensDao.revokeRefreshToken(
+          refreshTokenRecord.id,
+          trx,
         );
 
-        this.logger.log(`refreshToken: issued new access token for user_id=${payload.user_id} agency_id=${payload.agency_id}`);
-        return { access_token: accessToken };
+        this.logger.log(
+          `refreshToken: issued new token pair for user_id=${payload.user_id} agency_id=${payload.agency_id}`,
+        );
+        return tokens;
       } catch (error) {
-        this.logger.error(`refreshToken: failed — ${error.name}: ${error.message}`);
+        this.logger.error(
+          `refreshToken: failed — ${error.name}: ${error.message}`,
+        );
         throw new UnauthorizedException("Invalid refresh token");
       }
     });
@@ -589,20 +676,28 @@ export class AuthService {
     };
 
     // Generate access token
-    const accessSecret = this.configService.get<string>("ACCESS_TOKEN_SECRET") || "change_me_access";
-    const refreshSecret = this.configService.get<string>("REFRESH_TOKEN_SECRET") || "change_me_refresh";
+    const accessSecret =
+      this.configService.get<string>("ACCESS_TOKEN_SECRET") ||
+      "change_me_access";
+    const refreshSecret =
+      this.configService.get<string>("REFRESH_TOKEN_SECRET") ||
+      "change_me_refresh";
 
     const accessToken = this.jwtService.sign(payload, {
       secret: accessSecret,
-      expiresIn:
-        parseInt(this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") || "60000", 10),
+      expiresIn: this.parseExpiresIn(
+        this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN"),
+        900,
+      ) as any,
     });
 
     // Generate refresh token
     const refreshToken = this.jwtService.sign(payload, {
       secret: refreshSecret,
-      expiresIn:
-        parseInt(this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN") || "604800", 10),
+      expiresIn: this.parseExpiresIn(
+        this.configService.get<string>("REFRESH_TOKEN_EXPIRES_IN"),
+        604800,
+      ) as any,
     });
 
     // Store refresh token in database
@@ -620,5 +715,19 @@ export class AuthService {
     );
 
     return { access_token: accessToken, refresh_token: refreshToken };
+  }
+
+  // jsonwebtoken's expiresIn accepts either a number of seconds or a duration
+  // string like "1h"/"15m"/"7d" (parsed via the `ms` package) — but NOT both in
+  // one value. Blindly parseInt()-ing "1h" silently truncates to 1, i.e. 1 SECOND,
+  // which is what was making access tokens expire almost immediately after being
+  // issued. Only coerce to a number when the value is purely digits (raw seconds);
+  // otherwise pass the duration string straight through.
+  private parseExpiresIn(
+    value: string | undefined,
+    fallbackSeconds: number,
+  ): string | number {
+    if (!value) return fallbackSeconds;
+    return /^\d+$/.test(value) ? parseInt(value, 10) : value;
   }
 }

@@ -20,7 +20,7 @@ export class DuasController {
 
   @Post()
   async create(@Body() dto: CreateDuaDto) {
-    return this.duasService.create(dto);
+    return this.duasService.createWithTranslations(dto);
   }
 
   // ── Upload — must be before :id routes ──────────────────────
@@ -45,7 +45,7 @@ export class DuasController {
       limits: { fileSize: 20 * 1024 * 1024 },
     }),
   )
-  async uploadAudio(@UploadedFile() file: Express.Multer.File) {
+  async uploadAudio(@UploadedFile() file: any) {
     if (!file) throw new BadRequestException('No file uploaded');
     return { url: `/uploads/audio/${file.filename}` };
   }
@@ -55,13 +55,16 @@ export class DuasController {
   @IsPublic()
   @Get()
   async findAll(@Query() pagination: PaginationDto) {
-    return this.duasService.findAllPaginated({}, pagination.page_index, pagination.page_size);
+    return this.duasService.findAllPaginatedWithTranslations(
+      pagination.page_index ?? 1,
+      pagination.page_size ?? 10,
+    );
   }
 
   @IsPublic()
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.duasService.findOne(id);
+    return this.duasService.findOneWithTranslations(id);
   }
 
   @Patch(':id')
@@ -72,7 +75,7 @@ export class DuasController {
         this.duasService.deleteAudioFile(existing.audio_url);
       }
     }
-    return this.duasService.update(id, dto);
+    return this.duasService.updateWithTranslations(id, dto);
   }
 
   @Delete(':id')

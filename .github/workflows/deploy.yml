@@ -51,6 +51,7 @@ jobs:
         run: |
           echo "PORT=${{ secrets.PROD_PORT }}"                                                     >> .env
           echo "API_PREFIX=${{ secrets.PROD_API_PREFIX }}"                                         >> .env
+          echo "NODE_ENV=production"                                                               >> .env
           echo "DATABASE_HOST=${{ secrets.PROD_DATABASE_HOST }}"                                   >> .env
           echo "DATABASE_PORT=${{ secrets.PROD_DATABASE_PORT }}"                                   >> .env
           echo "DATABASE_USER=${{ secrets.PROD_DATABASE_USER }}"                                   >> .env
@@ -62,6 +63,16 @@ jobs:
           echo "REFRESH_TOKEN_EXPIRES_IN=${{ secrets.PROD_REFRESH_TOKEN_EXPIRES_IN }}"             >> .env
           echo "REFRESH_TOKEN_EXPIRES_IN_DAYS=${{ secrets.PROD_REFRESH_TOKEN_EXPIRES_IN_DAYS }}"   >> .env
           echo "OTP_EXPIRY_MINUTES=${{ secrets.PROD_OTP_EXPIRY_MINUTES }}"                         >> .env
+          echo "SMS_LOCAL_AUTH=${{ secrets.PROD_SMS_LOCAL_AUTH }}"                                 >> .env
+          echo "SMS_LOCAL_ORIGINATOR=${{ secrets.PROD_SMS_LOCAL_ORIGINATOR }}"                     >> .env
+          echo "SMS_OSON_LOGIN=${{ secrets.PROD_SMS_OSON_LOGIN }}"                                 >> .env
+          echo "SMS_OSON_SENDER=${{ secrets.PROD_SMS_OSON_SENDER }}"                               >> .env
+          echo "SMS_OSON_HASH=${{ secrets.PROD_SMS_OSON_HASH }}"                                   >> .env
+          echo "SMS_RU_AUTH=${{ secrets.PROD_SMS_RU_AUTH }}"                                       >> .env
+          echo "SENDPULSE_CLIENT_ID=${{ secrets.PROD_SENDPULSE_CLIENT_ID }}"                       >> .env
+          echo "SENDPULSE_CLIENT_SECRET=${{ secrets.PROD_SENDPULSE_CLIENT_SECRET }}"               >> .env
+          echo "SENDPULSE_SENDER=${{ secrets.PROD_SENDPULSE_SENDER }}"                             >> .env
+          echo "TELEGRAM_GATEWAY_TOKEN=${{ secrets.PROD_TELEGRAM_GATEWAY_TOKEN }}"                 >> .env
           echo "DEFAULT_COUNTRY_ID=${{ secrets.PROD_DEFAULT_COUNTRY_ID }}"                         >> .env
 
       - name: Write SSH private key

@@ -6,7 +6,10 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { AgencyResetPasswordDto } from './dto/agency-reset-password.dto';
 import { IsPublic } from 'src/shared/decorators';
+import { CurrentUser } from 'src/shared/decorators/current-user.decorator';
+import { JwtPayload } from 'src/shared/guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -26,6 +29,14 @@ export class AuthController {
   @Post('agency-login')
   async agencyLogin(@Body() dto: LoginDto) {
     return this.authService.agencyLogin(dto);
+  }
+
+  @Post('agency-reset-password')
+  async agencyResetPassword(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AgencyResetPasswordDto,
+  ) {
+    return this.authService.agencyResetPassword(user, dto);
   }
 
   // ===================== Pilgrim OTP Flow =====================

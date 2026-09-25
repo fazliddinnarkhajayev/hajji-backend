@@ -1,11 +1,21 @@
-import { IsString, IsOptional, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsInt,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { LocationTranslationDto } from './location-translation.dto';
 
 export class CreateLocationDto {
   @IsString()
-  name: string;
+  name_ar!: string;
 
+  // Base/default name — optional; derived from translations when absent.
+  @IsOptional()
   @IsString()
-  name_ar: string;
+  name?: string;
 
   @IsOptional()
   @IsString()
@@ -15,6 +25,21 @@ export class CreateLocationDto {
   @IsString()
   emoji?: string;
 
+  @IsOptional()
   @IsArray()
-  coords: [number, number];
+  coords?: [number, number];
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsInt()
+  sort_order?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LocationTranslationDto)
+  translations?: LocationTranslationDto[];
 }

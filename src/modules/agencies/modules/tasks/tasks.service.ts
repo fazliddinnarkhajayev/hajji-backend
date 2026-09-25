@@ -1,10 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AssignmentsDao, TaskCategoriesDao, TasksDao, Task } from './tasks.dao';
+import { AssignmentsDao, TaskCategoriesDao, TasksDao, TaskActivityLogDao, Task, TaskStatus, TaskStats, TaskActivityAction } from './tasks.dao';
 import { AgencyUsersDao } from 'src/modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
 import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { CompleteTaskDto } from './dto/complete-task.dto';
+import { FlagTaskDto } from './dto/flag-task.dto';
+import { ReassignTaskDto } from './dto/reassign-task.dto';
+import { ResolveFlagDto } from './dto/resolve-flag.dto';
+import { WebSocketService } from 'src/modules/websocket/websocket.service';
+import { NotificationsService } from 'src/modules/notifications/notifications.service';
 
 // Haversine: distance in meters between two GPS points
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -25,7 +30,73 @@ export class TasksService {
     private readonly categoriesDao: TaskCategoriesDao,
     private readonly tasksDao: TasksDao,
     private readonly agencyUsersDao: AgencyUsersDao,
+    private readonly webSocketService: WebSocketService,
+    private readonly notificationsService: NotificationsService,
+    private readonly taskActivityLogDao: TaskActivityLogDao,
   ) {}
+
+  // ── Activity log ────────────────────────────────────────────
+
+  private async logActivity(
+    taskId: string,
+    actorId: string,
+    action: TaskActivityAction,
+    opts: { comment?: string | null; fromStatus?: TaskStatus | null; toStatus?: TaskStatus | null } = {},
+  ): Promise<void> {
+    await this.taskActivityLogDao.insert({
+      task_id: taskId,
+      actor_id: actorId,
+      action,
+      comment: opts.comment ?? null,
+      from_status: opts.fromStatus ?? null,
+      to_status: opts.toStatus ?? null,
+    });
+  }
+
+  // ── Realtime ───────────────────────────────────────────────
+  // broadcastToUser expects the core users.id, not agency_users.id — resolve it here.
+  private async resolveUserId(agencyUserId: string): Promise<string | undefined> {
+    const agencyUser = await this.agencyUsersDao.findById(agencyUserId);
+    return (agencyUser as any)?.user_id;
+  }
+
+  private async emitTaskCreated(task: Task): Promise<void> {
+    const userId = await this.resolveUserId(task.assigned_to_id);
+    if (!userId) return;
+    const message = `New task assigned: "${task.title}"`;
+    this.webSocketService.broadcastToUser(userId, 'task_created', {
+      type: 'TASK_CREATED',
+      task,
+      message,
+    });
+    this.notificationsService.notify(userId, 'TASK_CREATED', 'New task assigned', {
+      message,
+      subject: task.title,
+      link: { screen: 'taskDetail', id: task.id },
+    });
+  }
+
+  private async emitTaskUpdate(
+    task: Task,
+    type: string,
+    message: string,
+    extraAgencyUserIds: string[] = [],
+  ): Promise<void> {
+    const agencyUserIds = new Set<string>([task.created_by_id, task.assigned_to_id, ...extraAgencyUserIds]);
+    const userIds = await Promise.all(
+      Array.from(agencyUserIds).map((id) => this.resolveUserId(id)),
+    );
+    userIds
+      .filter((id): id is string => !!id)
+      .forEach((userId) => {
+        this.webSocketService.broadcastToUser(userId, 'task_updated', { type, task, message });
+        this.notificationsService.notify(userId, type, task.title, {
+          message,
+          subject: task.title,
+          link: { screen: 'taskDetail', id: task.id },
+        });
+      });
+  }
 
   // ── Assignments ────────────────────────────────────────────
 
@@ -76,7 +147,7 @@ export class TasksService {
 
     const hasLocation = dto.location_lat != null && dto.location_lng != null;
 
-    return this.tasksDao.insert({
+    const created = await this.tasksDao.insert({
       agency_id: agencyId,
       created_by_id: supervisorId,
       assigned_to_id: dto.assigned_to_id,
@@ -90,11 +161,16 @@ export class TasksService {
       location_radius_meters: hasLocation ? (dto.location_radius_meters ?? 100) : null,
       status: 'PENDING',
     } as Partial<Task>);
+
+    const task = await this.tasksDao.findOneWithJoins(created.id) as Task;
+    await this.logActivity(task.id, supervisorId, 'CREATED', { toStatus: 'PENDING' });
+    await this.emitTaskCreated(task);
+    return task;
   }
 
-  async getTasksForUser(userId: string, agencyId: string, role: string, page = 1, size = 20) {
+  async getTasksForUser(userId: string, agencyId: string, role: string, page = 1, size = 20, status?: TaskStatus, sort: 'created_at' | 'updated_at' = 'created_at') {
     if (role === 'SUPERVISOR' || role === 'SUPERADMIN') {
-      const { data, total } = await this.tasksDao.findBySupervisor(userId, agencyId, page, size);
+      const { data, total } = await this.tasksDao.findBySupervisor(userId, agencyId, page, size, status, sort);
       return new PaginatedResult(data, {
         total_items_count: total,
         total_pages_count: Math.ceil(total / size) || 1,
@@ -103,7 +179,7 @@ export class TasksService {
       });
     }
     // MANAGER — sees tasks assigned to them
-    const { data, total } = await this.tasksDao.findByAssignee(userId, agencyId, page, size);
+    const { data, total } = await this.tasksDao.findByAssignee(userId, agencyId, page, size, status, sort);
     return new PaginatedResult(data, {
       total_items_count: total,
       total_pages_count: Math.ceil(total / size) || 1,
@@ -112,18 +188,76 @@ export class TasksService {
     });
   }
 
+  async getTaskStats(userId: string, agencyId: string, role: string): Promise<TaskStats> {
+    if (role === 'SUPERVISOR' || role === 'SUPERADMIN') {
+      return this.tasksDao.getStats({ created_by_id: userId }, agencyId);
+    }
+    // MANAGER — stats for tasks assigned to them
+    return this.tasksDao.getStats({ assigned_to_id: userId }, agencyId);
+  }
+
+  // Backs the home dashboard's "recent tasks" widget — same scoping as
+  // getTaskStats, just the most-recently-changed few tasks instead of counts.
+  async getRecentTasks(userId: string, agencyId: string, role: string, limit = 3): Promise<Task[]> {
+    if (role === 'SUPERVISOR' || role === 'SUPERADMIN') {
+      return this.tasksDao.findRecent({ created_by_id: userId }, agencyId, limit);
+    }
+    return this.tasksDao.findRecent({ assigned_to_id: userId }, agencyId, limit);
+  }
+
   async getTaskById(id: string, agencyId: string): Promise<Task> {
     const task = await this.tasksDao.findOneWithJoins(id);
     if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    task.activity_log = await this.taskActivityLogDao.findByTask(id);
     return task;
+  }
+
+  async startTask(id: string, userId: string, agencyId: string): Promise<Task> {
+    const task = await this.tasksDao.findOneWithJoins(id);
+    if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    if (task.assigned_to_id !== userId) throw new ForbiddenException('This task is not assigned to you');
+    if (task.status !== 'PENDING') throw new BadRequestException('Only a pending task can be started');
+
+    await this.tasksDao.updateById(id, {
+      status: 'IN_PROGRESS',
+      started_at: new Date(),
+      updated_at: new Date(),
+    } as any);
+
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, userId, 'STARTED', { fromStatus: task.status, toStatus: 'IN_PROGRESS' });
+    await this.emitTaskUpdate(updated, 'TASK_STARTED', `"${updated.title}" was started`);
+    return updated;
+  }
+
+  async flagTask(id: string, userId: string, agencyId: string, dto: FlagTaskDto): Promise<Task> {
+    const task = await this.tasksDao.findOneWithJoins(id);
+    if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    if (task.assigned_to_id !== userId) throw new ForbiddenException('This task is not assigned to you');
+    if (task.status !== 'IN_PROGRESS') throw new BadRequestException('Only an in-progress task can be flagged');
+
+    await this.tasksDao.updateById(id, {
+      status: 'FLAGGED',
+      flagged_at: new Date(),
+      issue_comment: dto.issue_comment,
+      updated_at: new Date(),
+    } as any);
+
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, userId, 'FLAGGED', {
+      comment: dto.issue_comment,
+      fromStatus: task.status,
+      toStatus: 'FLAGGED',
+    });
+    await this.emitTaskUpdate(updated, 'TASK_FLAGGED', `An issue was reported on "${updated.title}"`);
+    return updated;
   }
 
   async completeTask(id: string, userId: string, agencyId: string, dto: CompleteTaskDto): Promise<Task> {
     const task = await this.tasksDao.findOneWithJoins(id);
     if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
     if (task.assigned_to_id !== userId) throw new ForbiddenException('This task is not assigned to you');
-    if (task.status === 'COMPLETED') throw new BadRequestException('Task is already completed');
-    if (task.status === 'CANCELLED') throw new BadRequestException('Task is cancelled');
+    if (task.status !== 'IN_PROGRESS') throw new BadRequestException('Only an in-progress task can be completed');
 
     // GPS verification if task has a location
     if (task.location_lat != null && task.location_lng != null) {
@@ -153,7 +287,10 @@ export class TasksService {
       updated_at: new Date(),
     } as any);
 
-    return this.tasksDao.findOneWithJoins(id) as Promise<Task>;
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, userId, 'COMPLETED', { fromStatus: task.status, toStatus: 'COMPLETED' });
+    await this.emitTaskUpdate(updated, 'TASK_COMPLETED', `"${updated.title}" was completed`);
+    return updated;
   }
 
   async cancelTask(id: string, userId: string, agencyId: string): Promise<{ success: boolean }> {
@@ -161,7 +298,103 @@ export class TasksService {
     if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
     if (task.created_by_id !== userId) throw new ForbiddenException('Only the task creator can cancel');
     if (task.status === 'COMPLETED') throw new BadRequestException('Cannot cancel a completed task');
+    if (task.status === 'CANCELLED_ON_PROBLEM') throw new BadRequestException('Task is already cancelled');
     await this.tasksDao.updateById(id, { status: 'CANCELLED', updated_at: new Date() } as any);
+
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, userId, 'CANCELLED', { fromStatus: task.status, toStatus: 'CANCELLED' });
+    await this.emitTaskUpdate(updated, 'TASK_CANCELLED', `"${updated.title}" was cancelled`);
     return { success: true };
+  }
+
+  async reassignTask(id: string, supervisorId: string, agencyId: string, dto: ReassignTaskDto): Promise<Task> {
+    const task = await this.tasksDao.findOneWithJoins(id);
+    if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    if (task.created_by_id !== supervisorId) throw new ForbiddenException('Only the task creator can reassign');
+    if (task.status === 'COMPLETED') throw new BadRequestException('Cannot reassign a completed task');
+    if (task.status === 'CANCELLED' || task.status === 'CANCELLED_ON_PROBLEM') throw new BadRequestException('Cannot reassign a cancelled task');
+
+    const isAssigned = await this.assignmentsDao.isManagedBy(supervisorId, dto.assigned_to_id);
+    if (!isAssigned) throw new ForbiddenException('This manager is not assigned to you');
+
+    const previousAssigneeId = task.assigned_to_id;
+
+    await this.tasksDao.updateById(id, {
+      assigned_to_id: dto.assigned_to_id,
+      status: 'PENDING',
+      started_at: null,
+      flagged_at: null,
+      issue_comment: null,
+      completed_at: null,
+      completed_lat: null,
+      completed_lng: null,
+      completed_comment: null,
+      updated_at: new Date(),
+    } as any);
+
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, supervisorId, 'REASSIGNED', { fromStatus: task.status, toStatus: 'PENDING' });
+    await this.emitTaskUpdate(updated, 'TASK_REASSIGNED', `"${updated.title}" was reassigned`, [previousAssigneeId]);
+    return updated;
+  }
+
+  async closeTask(id: string, supervisorId: string, agencyId: string): Promise<Task> {
+    const task = await this.tasksDao.findOneWithJoins(id);
+    if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    if (task.created_by_id !== supervisorId) throw new ForbiddenException('Only the task creator can close this task');
+    if (task.status === 'COMPLETED') throw new BadRequestException('Task is already completed');
+    if (task.status === 'CANCELLED' || task.status === 'CANCELLED_ON_PROBLEM') throw new BadRequestException('Task is cancelled');
+
+    await this.tasksDao.updateById(id, {
+      status: 'COMPLETED',
+      completed_at: new Date(),
+      updated_at: new Date(),
+    } as any);
+
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, supervisorId, 'CLOSED', { fromStatus: task.status, toStatus: 'COMPLETED' });
+    await this.emitTaskUpdate(updated, 'TASK_CLOSED', `"${updated.title}" was closed`);
+    return updated;
+  }
+
+  // A flagged task isn't finished — the creator (supervisor/superadmin) must
+  // resolve it: either end the task in CANCELLED_ON_PROBLEM, or send it back
+  // to CONTINUE so the assignee can resume it themselves via continueTask().
+  async resolveFlag(id: string, supervisorId: string, agencyId: string, dto: ResolveFlagDto): Promise<Task> {
+    const task = await this.tasksDao.findOneWithJoins(id);
+    if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    if (task.created_by_id !== supervisorId) throw new ForbiddenException('Only the task creator can resolve a flagged task');
+    if (task.status !== 'FLAGGED') throw new BadRequestException('Only a flagged task can be resolved');
+
+    const toStatus: TaskStatus = dto.action === 'cancel' ? 'CANCELLED_ON_PROBLEM' : 'CONTINUE';
+    await this.tasksDao.updateById(id, { status: toStatus, updated_at: new Date() } as any);
+
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, supervisorId, dto.action === 'cancel' ? 'CANCELLED_ON_PROBLEM' : 'CONTINUE_APPROVED', {
+      comment: dto.comment,
+      fromStatus: 'FLAGGED',
+      toStatus,
+    });
+    if (dto.action === 'cancel') {
+      await this.emitTaskUpdate(updated, 'TASK_CANCELLED_ON_PROBLEM', `"${updated.title}" was cancelled after a reported issue`);
+    } else {
+      await this.emitTaskUpdate(updated, 'TASK_CONTINUE_APPROVED', `"${updated.title}" can be resumed`);
+    }
+    return updated;
+  }
+
+  // Assignee resumes a task the creator approved to continue after a flag.
+  async continueTask(id: string, userId: string, agencyId: string): Promise<Task> {
+    const task = await this.tasksDao.findOneWithJoins(id);
+    if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    if (task.assigned_to_id !== userId) throw new ForbiddenException('This task is not assigned to you');
+    if (task.status !== 'CONTINUE') throw new BadRequestException('This task is not awaiting resumption');
+
+    await this.tasksDao.updateById(id, { status: 'IN_PROGRESS', updated_at: new Date() } as any);
+
+    const updated = await this.tasksDao.findOneWithJoins(id) as Task;
+    await this.logActivity(id, userId, 'RESUMED', { fromStatus: 'CONTINUE', toStatus: 'IN_PROGRESS' });
+    await this.emitTaskUpdate(updated, 'TASK_RESUMED', `"${updated.title}" was resumed`);
+    return updated;
   }
 }

@@ -3,12 +3,14 @@ import {
   Get,
   Put,
   Post,
+  Delete,
   Body,
   HttpCode,
 } from '@nestjs/common';
 import { CurrentUser } from 'src/shared/decorators';
 import { ProfileService } from './profile.service';
 import { UserProfile, UserProfileSettings } from './profile.interface';
+import { PilgrimDeleteRequest } from 'src/shared/dao/pilgrim-delete-request.dao';
 
 @Controller('mobile/profile')
 export class ProfileController {
@@ -23,6 +25,26 @@ export class ProfileController {
   async getSettings(@CurrentUser() user: any): Promise<UserProfileSettings> {
     const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
     return this.profileService.getProfileSettings(profile.id);
+  }
+
+  @Get('delete-request')
+  async getDeleteRequest(@CurrentUser() user: any): Promise<PilgrimDeleteRequest | null> {
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
+    return this.profileService.getDeleteRequest(profile.id);
+  }
+
+  @Post('delete-request')
+  @HttpCode(201)
+  async createDeleteRequest(@CurrentUser() user: any): Promise<PilgrimDeleteRequest> {
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
+    return this.profileService.createDeleteRequest(profile.id);
+  }
+
+  @Delete('delete-request')
+  @HttpCode(200)
+  async cancelDeleteRequest(@CurrentUser() user: any): Promise<PilgrimDeleteRequest> {
+    const profile = await this.profileService.getUserProfile(user.id || user.id || user.sub);
+    return this.profileService.cancelDeleteRequest(profile.id);
   }
 
   @Put('language')

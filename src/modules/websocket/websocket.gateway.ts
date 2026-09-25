@@ -7,9 +7,12 @@ import {
   OnGatewayInit,
 } from '@nestjs/websockets';
 import { Logger, BadRequestException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Server, Socket } from 'socket.io';
 import { WebSocketService } from './websocket.service';
 import { MessageDto, NotificationDto } from './dto';
+import { JwtPayload } from 'src/shared/guards/jwt-auth.guard';
 
 @WSGateway({
   cors: {
@@ -25,7 +28,11 @@ export class WebSocketGateway
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly webSocketService: WebSocketService) {}
+  constructor(
+    private readonly webSocketService: WebSocketService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   afterInit(server: Server): void {
     this.webSocketService.setServer(server);
@@ -33,14 +40,36 @@ export class WebSocketGateway
     console.log('🚀 WebSocket Server Initialized - Ready to accept connections');
   }
 
-  handleConnection(client: Socket): void {
-    const userId = client.handshake.query.userId as string;
+  // Auth happens here, not per-event: a connection without a valid JWT is
+  // rejected outright, so every other handler in this gateway (and userId
+  // registered in WebSocketService) can trust the connection is who it claims
+  // to be — no client-supplied userId is trusted anymore.
+  async handleConnection(client: Socket): Promise<void> {
+    const token = (client.handshake.auth?.token as string | undefined) ?? (client.handshake.query?.token as string | undefined);
+
+    if (!token) {
+      this.logger.warn(`Client ${client.id} connected without a token — disconnecting`);
+      client.disconnect(true);
+      return;
+    }
+
+    let payload: JwtPayload;
+    try {
+      const secret = this.configService.get<string>('ACCESS_TOKEN_SECRET') || 'change_me_access';
+      payload = this.jwtService.verify<JwtPayload>(token, { secret });
+    } catch (error) {
+      this.logger.warn(`Client ${client.id} sent an invalid/expired token — disconnecting. ${error.message}`);
+      client.disconnect(true);
+      return;
+    }
+
+    const userId = payload.user_id;
     this.webSocketService.registerClient(client.id, userId);
     const totalClients = this.webSocketService.getConnectedClients().size;
     this.logger.log(
       `Client connected: ${client.id}, userId: ${userId}, total clients: ${totalClients}`,
     );
-    console.log(`✅ User Connected - ID: ${userId || 'Guest'} | Socket: ${client.id} | Total Connected: ${totalClients}`);
+    console.log(`✅ User Connected - ID: ${userId} | Socket: ${client.id} | Total Connected: ${totalClients}`);
     client.emit('connection', { message: 'Connected to WebSocket server' });
   }
 

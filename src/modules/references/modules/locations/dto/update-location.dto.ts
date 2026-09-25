@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsInt,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { LocationTranslationDto } from './location-translation.dto';
 
 export class UpdateLocationDto {
   @IsOptional()
@@ -20,4 +28,18 @@ export class UpdateLocationDto {
   @IsOptional()
   @IsArray()
   coords?: [number, number];
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsInt()
+  sort_order?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LocationTranslationDto)
+  translations?: LocationTranslationDto[];
 }

@@ -6,6 +6,7 @@ import {
 import { InvitationsDao, Invitation } from "src/shared/dao/invitations.dao";
 import { PilgrimsDao } from "src/shared/dao/piligrims.dao";
 import { WebSocketService } from "src/modules/websocket/websocket.service";
+import { NotificationsService } from "src/modules/notifications/notifications.service";
 import { CreateInvitationDto } from "./invitations.dto";
 import { InvitationStatus } from "./enums/invitation-status.enum";
 import { PaginatedResult } from "src/shared/interfaces/pagination.interface";
@@ -16,6 +17,7 @@ export class InvitationsService {
     private readonly invitationsDao: InvitationsDao,
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly webSocketService: WebSocketService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -61,15 +63,21 @@ export class InvitationsService {
 
     // Send notification to pilgrim about the new invitation
     if (pilgrim.user_id) {
+      const message = `You have received a new invitation from ${invitation.agency?.name || 'an agency'}`;
       this.webSocketService.broadcastToUser(
         pilgrim.user_id,
         'new_invitation',
         {
           type: 'NEW_INVITATION',
           invitation,
-          message: `You have received a new invitation from ${invitation.agency?.name || 'an agency'}`,
+          message,
         },
       );
+      this.notificationsService.notify(pilgrim.user_id, 'NEW_INVITATION', 'New invitation', {
+        message,
+        subject: invitation.agency?.name,
+        link: { screen: 'invitationDetail', id: invitation.id },
+      });
     }
 
     return invitation;

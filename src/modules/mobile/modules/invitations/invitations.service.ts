@@ -7,6 +7,7 @@ import { InvitationsDao, Invitation } from 'src/shared/dao/invitations.dao';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import { PilgrimAgencyHistoryDao } from 'src/shared/dao/pilgrim-agency-history.dao';
 import { WebSocketService } from 'src/modules/websocket/websocket.service';
+import { NotificationsService } from 'src/modules/notifications/notifications.service';
 import { UpdateInvitationStatusDto } from './invitations.dto';
 import { InvitationStatus } from 'src/modules/agencies/modules/invitations/enums/invitation-status.enum';
 import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
@@ -18,6 +19,7 @@ export class InvitationsService {
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly pilgrimAgencyHistoryDao: PilgrimAgencyHistoryDao,
     private readonly webSocketService: WebSocketService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async getAll(
@@ -137,6 +139,7 @@ export class InvitationsService {
 
     // Send notification to agency about the response (outside transaction)
     const updatedWithDetails = await this.invitationsDao.findById(invitationId);
+    const responseMessage = `Pilgrim ${updatedWithDetails?.pilgrim?.first_name || ''} ${updatedWithDetails?.pilgrim?.last_name || ''} has ${status.toLowerCase()} your invitation`;
     this.webSocketService.broadcastToUser(
       invitation.created_by_id,
       'invitation_response',
@@ -144,9 +147,18 @@ export class InvitationsService {
         type: 'INVITATION_RESPONSE',
         invitation: updatedWithDetails,
         status,
-        message: `Pilgrim ${updatedWithDetails?.pilgrim?.first_name || ''} ${updatedWithDetails?.pilgrim?.last_name || ''} has ${status.toLowerCase()} your invitation`,
+        message: responseMessage,
       },
     );
+    // Split by outcome (rather than one generic INVITATION_RESPONSE) so the
+    // frontend can pick the right "accepted"/"rejected" i18n template.
+    const pilgrimName = `${updatedWithDetails?.pilgrim?.first_name || ''} ${updatedWithDetails?.pilgrim?.last_name || ''}`.trim();
+    const responseType = status === InvitationStatus.ACCEPTED ? 'INVITATION_ACCEPTED' : 'INVITATION_REJECTED';
+    this.notificationsService.notify(invitation.created_by_id, responseType, 'Invitation response', {
+      message: responseMessage,
+      subject: pilgrimName,
+      link: { screen: 'invitationDetail', id: invitationId },
+    });
 
     return updated;
   }

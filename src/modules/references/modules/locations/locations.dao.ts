@@ -11,6 +11,8 @@ export interface Location {
   description?: string;
   emoji?: string;
   coords: [number, number] | string;
+  category?: string | null;
+  sort_order?: number | null;
   created_at?: Date;
   updated_at?: Date;
   created_by_id?: string;
@@ -24,22 +26,31 @@ export class LocationsDao extends BaseDao<Location> {
     super(TABLE_NAMES.LOCATIONS, db);
   }
 
-  async insert(data: Partial<Location>) {
+  /** All locations in stable content order (for full offline download). */
+  findAllOrdered(trx?: Knex.Transaction): Promise<Location[]> {
+    return this.qb(trx)
+      .where({ is_deleted: false })
+      .whereNull('deleted_at')
+      .orderByRaw('sort_order asc nulls last')
+      .orderBy('created_at', 'asc') as unknown as Promise<Location[]>;
+  }
+
+  async insert(data: Partial<Location>, trx?: Knex.Transaction) {
     // Ensure coords is stored as JSON string
     const processedData = {
       ...data,
       coords: typeof data.coords === 'string' ? data.coords : JSON.stringify(data.coords),
     };
-    return super.insert(processedData);
+    return super.insert(processedData, trx);
   }
 
-  async updateById(id: string, data: Partial<Location>) {
+  async updateById(id: string, data: Partial<Location>, trx?: Knex.Transaction) {
     const processedData = {
       ...data,
       ...(data.coords && {
         coords: typeof data.coords === 'string' ? data.coords : JSON.stringify(data.coords),
       }),
     };
-    return super.updateById(id, processedData);
+    return super.updateById(id, processedData, trx);
   }
 }

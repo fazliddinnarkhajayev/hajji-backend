@@ -1,12 +1,45 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PilgrimsDao, Pilgrim } from 'src/shared/dao/piligrims.dao';
+import { PilgrimDeleteRequestDao, PilgrimDeleteRequest } from 'src/shared/dao/pilgrim-delete-request.dao';
 import { UserProfile, UserProfileSettings } from './profile.interface';
 
 const VALID_LANGUAGES = ['uz', 'ru', 'en'];
 
 @Injectable()
 export class ProfileService {
-  constructor(private readonly pilgrimsDao: PilgrimsDao) {}
+  constructor(
+    private readonly pilgrimsDao: PilgrimsDao,
+    private readonly deleteRequestDao: PilgrimDeleteRequestDao,
+  ) {}
+
+  /** The pilgrim's current active account-deletion request, or null. */
+  async getDeleteRequest(pilgrimId: string): Promise<PilgrimDeleteRequest | null> {
+    const request = await this.deleteRequestDao.findActiveByPilgrimId(pilgrimId);
+    return request || null;
+  }
+
+  /**
+   * Create a PENDING account-deletion request. Idempotent: if one is already
+   * active, return it rather than creating a duplicate.
+   */
+  async createDeleteRequest(pilgrimId: string): Promise<PilgrimDeleteRequest> {
+    const existing = await this.deleteRequestDao.findActiveByPilgrimId(pilgrimId);
+    if (existing) return existing;
+    return this.deleteRequestDao.insert({ pilgrim_id: pilgrimId, status: 'PENDING' });
+  }
+
+  /** Cancel the pilgrim's active deletion request (sets CANCELLED). */
+  async cancelDeleteRequest(pilgrimId: string): Promise<PilgrimDeleteRequest> {
+    const existing = await this.deleteRequestDao.findActiveByPilgrimId(pilgrimId);
+    if (!existing) {
+      throw new NotFoundException('No active delete request found');
+    }
+    const updated = await this.deleteRequestDao.updateById(existing.id, {
+      status: 'CANCELLED',
+      updated_at: new Date(),
+    });
+    return updated as PilgrimDeleteRequest;
+  }
 
   async getUserProfile(userId: string): Promise<UserProfile> {
     const profile = await this.pilgrimsDao.findByUserIdWithJoins(userId);
@@ -109,6 +142,7 @@ export class ProfileService {
       last_name: pilgrim.last_name || null,
       middle_name: pilgrim.middle_name || null,
       phone: pilgrim.phone || null,
+      pinfl: pilgrim.pinfl || null,
       email: pilgrim.email || null,
       avatar_url: pilgrim.avatar_url || null,
       language: pilgrim.language || 'uz',
@@ -127,6 +161,7 @@ export class ProfileService {
       district: pilgrim.district,
       agency: pilgrim.agency,
       group_id: pilgrim.group_id ?? null,
+      group: pilgrim.group ?? null,
     };
   }
 

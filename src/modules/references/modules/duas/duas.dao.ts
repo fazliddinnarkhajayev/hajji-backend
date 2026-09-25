@@ -6,14 +6,17 @@ import { BaseDao } from 'src/shared/dao/base.dao';
 
 export interface Dua {
   id: string;
-  title: string;
   category: string;
   arabic: string;
+  reference?: string;
+  audio_url?: string;
+  sort_order?: number | null;
+  // Legacy single-language columns — kept for backward compat; new language
+  // text lives in `dua_translations`.
+  title?: string;
   transliteration?: string;
   translation?: string;
-  reference?: string;
   virtue?: string;
-  audio_url?: string;
   created_at?: Date;
   created_by_id?: string;
   updated_at?: Date;
@@ -25,5 +28,14 @@ export interface Dua {
 export class DuasDao extends BaseDao<Dua> {
   constructor(@Inject(KNEX_CONNECTION) db: Knex) {
     super(TABLE_NAMES.DUAS, db);
+  }
+
+  /** All duas in stable content order (for full offline download). */
+  findAllOrdered(trx?: Knex.Transaction): Promise<Dua[]> {
+    return this.qb(trx)
+      .where({ is_deleted: false })
+      .whereNull('deleted_at')
+      .orderByRaw('sort_order asc nulls last')
+      .orderBy('created_at', 'asc') as unknown as Promise<Dua[]>;
   }
 }

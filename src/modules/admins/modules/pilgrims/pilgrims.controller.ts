@@ -19,6 +19,18 @@ export class PilgrimsController {
     return this.pilgrimsService.findAllPaginated({}, pagination.page_index, pagination.page_size);
   }
 
+  // NOTE: must be declared before `@Get(':id')`, otherwise `:id` captures
+  // "delete-requests".
+  @Get('delete-requests')
+  async listDeleteRequests(@Query() pagination: PaginationDto) {
+    return this.pilgrimsService.listDeleteRequests(pagination.page_index, pagination.page_size);
+  }
+
+  @Post('delete-requests/:id/approve')
+  async approveDeleteRequest(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.pilgrimsService.approveDeleteRequest(id, user);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.pilgrimsService.findOne(id);

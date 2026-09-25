@@ -10,6 +10,7 @@ import { mkdirSync } from 'fs';
 
 async function bootstrap() {
   mkdirSync(join(process.cwd(), 'uploads', 'audio'), { recursive: true });
+  mkdirSync(join(process.cwd(), 'uploads', 'chat'), { recursive: true });
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const apiPrefix = process.env.API_PREFIX ?? 'api';

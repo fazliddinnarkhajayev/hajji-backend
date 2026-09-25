@@ -1,9 +1,14 @@
-import { IsString, IsOptional } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { DuaTranslationDto } from './dua-translation.dto';
 
 export class CreateDuaDto {
-  @IsString()
-  title!: string;
-
   @IsString()
   category!: string;
 
@@ -12,21 +17,20 @@ export class CreateDuaDto {
 
   @IsOptional()
   @IsString()
-  transliteration?: string;
-
-  @IsOptional()
-  @IsString()
-  translation?: string;
-
-  @IsOptional()
-  @IsString()
   reference?: string;
 
   @IsOptional()
   @IsString()
-  virtue?: string;
+  audio_url?: string;
 
   @IsOptional()
-  @IsString()
-  audio_url?: string;
+  @IsInt()
+  sort_order?: number;
+
+  // Per-language text. One entry per language the editor filled in.
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DuaTranslationDto)
+  translations?: DuaTranslationDto[];
 }

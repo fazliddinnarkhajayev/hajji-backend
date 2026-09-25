@@ -9,6 +9,7 @@ import { GroupsDao } from "./dao/groups.dao";
 import { GroupMembersDao } from "./dao/group-members.dao";
 import { UsersAuthDao } from "./dao/users-auth.dao";
 import { SundryService } from "./services/sundry.service";
+import { SmsService } from "./services/sms.service";
 
 @Module({
   imports: [JwtModule.register({})],
@@ -18,6 +19,7 @@ import { SundryService } from "./services/sundry.service";
       useClass: JwtAuthGuard,
     },
     SundryService,
+    SmsService,
     PilgrimAgencyHistoryDao,
     InvitationsDao,
     PilgrimsDao,
@@ -25,6 +27,6 @@ import { SundryService } from "./services/sundry.service";
     GroupMembersDao,
     UsersAuthDao,
   ],
-  exports: [JwtModule, SundryService, PilgrimAgencyHistoryDao, InvitationsDao, PilgrimsDao, GroupsDao, GroupMembersDao, UsersAuthDao],
+  exports: [JwtModule, SundryService, SmsService, PilgrimAgencyHistoryDao, InvitationsDao, PilgrimsDao, GroupsDao, GroupMembersDao, UsersAuthDao],
 })
 export class SharedModule {}
