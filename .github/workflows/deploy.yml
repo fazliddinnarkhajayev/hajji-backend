@@ -63,6 +63,9 @@ jobs:
           echo "REFRESH_TOKEN_EXPIRES_IN=${{ secrets.PROD_REFRESH_TOKEN_EXPIRES_IN }}"             >> .env
           echo "REFRESH_TOKEN_EXPIRES_IN_DAYS=${{ secrets.PROD_REFRESH_TOKEN_EXPIRES_IN_DAYS }}"   >> .env
           echo "OTP_EXPIRY_MINUTES=${{ secrets.PROD_OTP_EXPIRY_MINUTES }}"                         >> .env
+          # SMS provider not connected yet: SMS OTP is the fixed mock code 123456 (auth.service sendOtp).
+          # Set to false once SMS delivery is live.
+          echo "SMS_MOCK=true"                                                                     >> .env
           echo "SMS_LOCAL_AUTH=${{ secrets.PROD_SMS_LOCAL_AUTH }}"                                 >> .env
           echo "SMS_LOCAL_ORIGINATOR=${{ secrets.PROD_SMS_LOCAL_ORIGINATOR }}"                     >> .env
           echo "SMS_OSON_LOGIN=${{ secrets.PROD_SMS_OSON_LOGIN }}"                                 >> .env

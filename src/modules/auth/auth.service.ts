@@ -47,6 +47,9 @@ export interface TokenPair {
   refresh_token: string;
 }
 
+/** Fixed OTP for the SMS channel while no SMS provider is connected (see sendOtp). */
+const SMS_MOCK_CODE = "123456";
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -233,8 +236,15 @@ export class AuthService {
       }
     }
 
+    // SMS delivery is not connected yet: SMS codes are the fixed mock code and
+    // nothing is sent. The session is still stored, so verify + register work
+    // as usual. Set SMS_MOCK=false once an SMS provider is live.
+    const smsMock =
+      dto.method !== "TELEGRAM" &&
+      this.configService.get<string>("SMS_MOCK") !== "false";
+
     // Generate OTP code (6 digits)
-    const code = String(randomInt(100000, 999999));
+    const code = smsMock ? SMS_MOCK_CODE : String(randomInt(100000, 999999));
 
     // Get OTP expiry from config
     const expiryMinutes = Number(
@@ -249,6 +259,11 @@ export class AuthService {
       dto.method,
       expiresAt,
     );
+
+    if (smsMock) {
+      this.logger.warn(`SMS_MOCK: OTP for ${phone} not sent; use code ${SMS_MOCK_CODE}`);
+      return { success: true, expires_in_minutes: expiryMinutes };
+    }
 
     // Deliver the code via the requested channel.
     const sent =
