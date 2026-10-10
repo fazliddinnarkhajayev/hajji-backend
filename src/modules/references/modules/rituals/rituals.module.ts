@@ -5,6 +5,7 @@ import { RitualsDao } from './rituals.dao';
 import { RitualTranslationsDao } from './ritual-translations.dao';
 import { RitualSubstepsDao } from './ritual-substeps.dao';
 import { RitualSubstepTranslationsDao } from './ritual-substep-translations.dao';
+import { RitualDuasDao } from './ritual-duas.dao';
 
 @Module({
   providers: [
@@ -13,8 +14,9 @@ import { RitualSubstepTranslationsDao } from './ritual-substep-translations.dao'
     RitualTranslationsDao,
     RitualSubstepsDao,
     RitualSubstepTranslationsDao,
+    RitualDuasDao,
   ],
   controllers: [RitualsController],
-  exports: [RitualsService, RitualsDao, RitualTranslationsDao],
+  exports: [RitualsService, RitualsDao, RitualTranslationsDao, RitualDuasDao],
 })
 export class RitualsModule {}
