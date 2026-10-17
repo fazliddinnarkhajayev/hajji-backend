@@ -5,6 +5,7 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { PilgrimsDao } from 'src/shared/dao/piligrims.dao';
 import { GroupMembersDao } from 'src/shared/dao/group-members.dao';
+import { GroupVoiceKeysDao } from 'src/shared/dao/group-voice-keys.dao';
 import { UsersAuthDao } from 'src/shared/dao/users-auth.dao';
 import { RoomRequestsDao, RoomRequestWithMembers } from 'src/shared/dao/room-requests.dao';
 import { RoomsDao, RoomInput, RoomWithMembers } from 'src/shared/dao/rooms.dao';
@@ -22,16 +23,34 @@ export class GroupsService {
     private readonly roomRequestsDao: RoomRequestsDao,
     private readonly roomsDao: RoomsDao,
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
+    private readonly voiceKeysDao: GroupVoiceKeysDao,
   ) {}
 
   async create(agencyId: string, createGroupDto: CreateGroupDto): Promise<Group> {
-    return this.groupsDao.insert({
-      ...createGroupDto,
-      agency_id: agencyId,
-      departure_date: new Date(createGroupDto.departure_date),
-      return_date: new Date(createGroupDto.return_date),
-      status: createGroupDto.status || 'NEW',
-    } as Partial<Group>);
+    // The group and its voice key ("Router orqali") are created together.
+    return this.groupsDao.transaction(async (trx) => {
+      const group = await this.groupsDao.insert({
+        ...createGroupDto,
+        agency_id: agencyId,
+        departure_date: new Date(createGroupDto.departure_date),
+        return_date: new Date(createGroupDto.return_date),
+        status: createGroupDto.status || 'NEW',
+      } as Partial<Group>, trx);
+      await this.voiceKeysDao.ensure(group.id, trx);
+      return group;
+    });
+  }
+
+  /**
+   * New voice key for the group (key_version + 1), e.g. after removing a member. Phones get it on
+   * their next online profile refresh; until then the old key keeps working offline (documented limit).
+   * Returns the version only — never the key.
+   */
+  async rotateVoiceKey(id: string, agencyId: string): Promise<{ key_version: number; rotated_at: Date }> {
+    await this.findOne(id, agencyId);
+    const r = await this.voiceKeysDao.rotate(id);
+    if (!r) throw new NotFoundException('Group not found');
+    return r;
   }
 
   async findByAgency(agencyId: string, pageIndex = 1, pageSize = 10): Promise<PaginatedResult<Group>> {

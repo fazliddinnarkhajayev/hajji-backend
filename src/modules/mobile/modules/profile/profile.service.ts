@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PilgrimsDao, Pilgrim } from 'src/shared/dao/piligrims.dao';
 import { PilgrimDeleteRequestDao, PilgrimDeleteRequest } from 'src/shared/dao/pilgrim-delete-request.dao';
 import { UserProfile, UserProfileSettings } from './profile.interface';
+import { GroupVoiceKeysDao } from 'src/shared/dao/group-voice-keys.dao';
 
 const VALID_LANGUAGES = ['uz', 'ru', 'en'];
 
@@ -10,7 +11,25 @@ export class ProfileService {
   constructor(
     private readonly pilgrimsDao: PilgrimsDao,
     private readonly deleteRequestDao: PilgrimDeleteRequestDao,
+    private readonly voiceKeysDao: GroupVoiceKeysDao,
   ) {}
+
+  /**
+   * GET /mobile/profile: the profile plus the group's "Router orqali" voice key. The group comes from
+   * this pilgrim's own `group_members` row, so the key reaches only members of that group. The key is
+   * created lazily if the group has none and is never regenerated here.
+   */
+  async getUserProfileWithVoice(userId: string): Promise<UserProfile> {
+    const profile = await this.getUserProfile(userId);
+    const group = profile.group;
+    if (!group?.id || group.status === 'CANCELLED') return profile;
+    const voice = await this.voiceKeysDao.ensure(group.id);
+    if (!voice) return profile; // group deleted
+    return {
+      ...profile,
+      group: { ...group, voice: { member_id: profile.id, key: voice.key, key_version: voice.key_version } },
+    };
+  }
 
   /** The pilgrim's current active account-deletion request, or null. */
   async getDeleteRequest(pilgrimId: string): Promise<PilgrimDeleteRequest | null> {

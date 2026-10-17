@@ -1,3 +1,11 @@
+/** Contract with the app (hajji-guide docs/router-voice.md §4). */
+export interface GroupVoiceDto {
+  member_id: string;
+  /** base64, 32 random bytes. Secret. */
+  key: string;
+  key_version: number;
+}
+
 export interface UserProfile {
   id: string;
   full_name: string;
@@ -48,6 +56,11 @@ export interface UserProfile {
     status?: string | null;
     guide_name?: string | null;
     guide_phone?: string | null;
+    /**
+     * "Router orqali" group voice key — only in GET /mobile/profile, only for a member of this group.
+     * `member_id` is the pilgrim id used by GET /mobile/plans/members.
+     */
+    voice?: GroupVoiceDto;
   } | null;
 }
 

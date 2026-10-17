@@ -27,6 +27,12 @@ export class GroupsController {
 
   // ── Multi-segment routes before :id ───────────────────────
 
+  /** New "Router orqali" voice key for the group (returns key_version only, never the key). */
+  @Post(':groupId/voice-key/rotate')
+  async rotateVoiceKey(@Param('groupId') groupId: string, @CurrentUser() user: any) {
+    return this.groupsService.rotateVoiceKey(groupId, user.agency_id);
+  }
+
   @Get(':groupId/members')
   async getPilgrimsInGroup(
     @Param('groupId') groupId: string,

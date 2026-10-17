@@ -8,6 +8,7 @@ import { NotificationsService } from 'src/modules/notifications/notifications.se
 import { AgencyUsersDao } from 'src/modules/admins/modules/agencies/modules/agency-users/agency-users.dao';
 import { RoomRequestsDao, RoomRequestWithMembers } from 'src/shared/dao/room-requests.dao';
 import { GroupMembersDao } from 'src/shared/dao/group-members.dao';
+import { GroupVoiceKeysDao } from 'src/shared/dao/group-voice-keys.dao';
 import { RoomsDao, RoomWithMembers } from 'src/shared/dao/rooms.dao';
 import { GroupPlansDao, PlanProceduresDao, PlanConfirmationsDao } from 'src/modules/agencies/modules/plans/plans.dao';
 
@@ -24,6 +25,7 @@ export class GroupsService {
     private readonly plansDao: GroupPlansDao,
     private readonly proceduresDao: PlanProceduresDao,
     private readonly confirmationsDao: PlanConfirmationsDao,
+    private readonly voiceKeysDao: GroupVoiceKeysDao,
   ) {}
 
   async create(dto: CreateGroupDto, userId?: string): Promise<Group> {
@@ -35,11 +37,16 @@ export class GroupsService {
       throw new BadRequestException('Return date must be after departure date');
     }
 
-    const createdGroup = await this.groupsDao.insert({
-      ...dto,
-      status: 'NEW',
-      created_by_id: userId,
-    } as Partial<Group>);
+    // The group and its voice key ("Router orqali") are created together.
+    const createdGroup = await this.groupsDao.transaction(async (trx) => {
+      const group = await this.groupsDao.insert({
+        ...dto,
+        status: 'NEW',
+        created_by_id: userId,
+      } as Partial<Group>, trx);
+      await this.voiceKeysDao.ensure(group.id, trx);
+      return group;
+    });
 
     // Get created group with joins
     const groupWithDetails = await this.groupsDao.findByIdWithJoins(createdGroup.id);

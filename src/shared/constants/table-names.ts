@@ -17,6 +17,7 @@ export const TABLE_NAMES = {
   INVITATIONS: 'invitations',
   GROUPS: 'groups',
   GROUP_MEMBERS: 'group_members',
+  GROUP_VOICE_KEYS: 'group_voice_keys',
   ROOM_REQUESTS: 'room_requests',
   ROOM_REQUEST_MEMBERS: 'room_request_members',
   ROOMS: 'rooms',

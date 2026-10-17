@@ -5,6 +5,7 @@ import {
   Post,
   Delete,
   Body,
+  Header,
   HttpCode,
 } from '@nestjs/common';
 import { CurrentUser } from 'src/shared/decorators';
@@ -17,8 +18,9 @@ export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   @Get()
+  @Header('Cache-Control', 'no-store') // carries the group voice key
   async getProfile(@CurrentUser() user: any): Promise<UserProfile> {
-    return this.profileService.getUserProfile(user.id || user.id || user.sub);
+    return this.profileService.getUserProfileWithVoice(user.id || user.id || user.sub);
   }
 
   @Get('settings')
