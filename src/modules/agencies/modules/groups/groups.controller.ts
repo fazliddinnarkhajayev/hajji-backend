@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Param, Query, Patch, Body, Put, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Patch, Body, Put, Delete, UseGuards } from '@nestjs/common';
 import { GroupsService } from './groups.service';
-import { CurrentUser } from 'src/shared/decorators';
+import { AgencyRoles, CurrentUser } from 'src/shared/decorators';
+import { AgencyRolesGuard } from 'src/shared/guards/agency-roles.guard';
+import { AgencyUserRoleEnum } from 'src/shared/enums/agency-user-role.enum';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddPilgrimToGroupDto } from './dto/add-pilgrim-to-group.dto';
@@ -10,10 +12,15 @@ import { AddRoomRequestMemberDto } from './dto/add-room-request-member.dto';
 import { CreateRoomsDto } from './dto/create-rooms.dto';
 import { AddRoomMemberDto } from './dto/add-room-member.dto';
 
+/** Only agency admins (not field managers) may change groups, rooms and plans. */
+const MANAGE_ROLES = [AgencyUserRoleEnum.SUPERADMIN, AgencyUserRoleEnum.SUPERVISOR];
+
+@UseGuards(AgencyRolesGuard)
 @Controller('agencies/groups')
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Post()
   async create(@Body() createGroupDto: CreateGroupDto, @CurrentUser() user: any) {
     return this.groupsService.create(user.agency_id, createGroupDto);
@@ -28,6 +35,7 @@ export class GroupsController {
   // ── Multi-segment routes before :id ───────────────────────
 
   /** New "Router orqali" voice key for the group (returns key_version only, never the key). */
+  @AgencyRoles(...MANAGE_ROLES)
   @Post(':groupId/voice-key/rotate')
   async rotateVoiceKey(@Param('groupId') groupId: string, @CurrentUser() user: any) {
     return this.groupsService.rotateVoiceKey(groupId, user.agency_id);
@@ -48,6 +56,7 @@ export class GroupsController {
     );
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Post(':groupId/members')
   async addPilgrimToGroup(
     @Param('groupId') groupId: string,
@@ -57,6 +66,7 @@ export class GroupsController {
     return this.groupsService.addPilgrimToGroup(groupId, user.agency_id, dto.pilgrim_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Delete(':groupId/members/:pilgrimId')
   async removePilgrimFromGroup(
     @Param('groupId') groupId: string,
@@ -71,6 +81,7 @@ export class GroupsController {
     return this.groupsService.getRoomRequests(groupId, user.agency_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Post(':groupId/room-requests')
   async createRoomRequest(
     @Param('groupId') groupId: string,
@@ -80,6 +91,7 @@ export class GroupsController {
     return this.groupsService.createRoomRequest(groupId, user.agency_id, dto.name, user.id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Patch(':groupId/room-requests/:roomRequestId')
   async updateRoomRequest(
     @Param('groupId') groupId: string,
@@ -90,6 +102,7 @@ export class GroupsController {
     return this.groupsService.updateRoomRequest(groupId, roomRequestId, user.agency_id, dto.name);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Delete(':groupId/room-requests/:roomRequestId')
   async deleteRoomRequest(
     @Param('groupId') groupId: string,
@@ -99,6 +112,7 @@ export class GroupsController {
     return this.groupsService.deleteRoomRequest(groupId, roomRequestId, user.agency_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Post(':groupId/room-requests/:roomRequestId/members')
   async addRoomRequestMember(
     @Param('groupId') groupId: string,
@@ -109,6 +123,7 @@ export class GroupsController {
     return this.groupsService.addRoomRequestMember(groupId, roomRequestId, user.agency_id, dto.pilgrim_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Delete(':groupId/room-requests/:roomRequestId/members/:pilgrimId')
   async removeRoomRequestMember(
     @Param('groupId') groupId: string,
@@ -126,6 +141,7 @@ export class GroupsController {
     return this.groupsService.getRooms(groupId, user.agency_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Post(':groupId/rooms')
   async createRooms(
     @Param('groupId') groupId: string,
@@ -135,6 +151,7 @@ export class GroupsController {
     return this.groupsService.createRooms(groupId, user.agency_id, dto.rooms, user.id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Delete(':groupId/rooms/:roomId')
   async deleteRoom(
     @Param('groupId') groupId: string,
@@ -144,6 +161,7 @@ export class GroupsController {
     return this.groupsService.deleteRoom(groupId, roomId, user.agency_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Post(':groupId/rooms/:roomId/members')
   async addRoomMember(
     @Param('groupId') groupId: string,
@@ -154,6 +172,7 @@ export class GroupsController {
     return this.groupsService.addRoomMember(groupId, roomId, user.agency_id, dto.pilgrim_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Delete(':groupId/rooms/:roomId/members/:pilgrimId')
   async removeRoomMember(
     @Param('groupId') groupId: string,
@@ -171,11 +190,13 @@ export class GroupsController {
     return this.groupsService.findOne(id, user.agency_id);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Put(':id')
   async update(@Param('id') id: string, @Body() updateGroupDto: UpdateGroupDto, @CurrentUser() user: any) {
     return this.groupsService.update(id, user.agency_id, updateGroupDto);
   }
 
+  @AgencyRoles(...MANAGE_ROLES)
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.groupsService.remove(id, user.agency_id);

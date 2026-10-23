@@ -80,22 +80,23 @@ export class TasksService {
     task: Task,
     type: string,
     message: string,
+    actorAgencyUserId: string,
     extraAgencyUserIds: string[] = [],
   ): Promise<void> {
-    const agencyUserIds = new Set<string>([task.created_by_id, task.assigned_to_id, ...extraAgencyUserIds]);
-    const userIds = await Promise.all(
-      Array.from(agencyUserIds).map((id) => this.resolveUserId(id)),
-    );
-    userIds
-      .filter((id): id is string => !!id)
-      .forEach((userId) => {
-        this.webSocketService.broadcastToUser(userId, 'task_updated', { type, task, message });
-        this.notificationsService.notify(userId, type, task.title, {
-          message,
-          subject: task.title,
-          link: { screen: 'taskDetail', id: task.id },
-        });
+    const agencyUserIds = Array.from(new Set<string>([task.created_by_id, task.assigned_to_id, ...extraAgencyUserIds]));
+    const userIds = await Promise.all(agencyUserIds.map((id) => this.resolveUserId(id)));
+    userIds.forEach((userId, i) => {
+      if (!userId) return;
+      // Everyone gets the socket event so the actor's other devices stay in sync,
+      // but the actor is not notified about their own action.
+      this.webSocketService.broadcastToUser(userId, 'task_updated', { type, task, message, actor_id: actorAgencyUserId });
+      if (agencyUserIds[i] === actorAgencyUserId) return;
+      this.notificationsService.notify(userId, type, task.title, {
+        message,
+        subject: task.title,
+        link: { screen: 'taskDetail', id: task.id },
       });
+    });
   }
 
   // ── Assignments ────────────────────────────────────────────
@@ -226,7 +227,7 @@ export class TasksService {
 
     const updated = await this.tasksDao.findOneWithJoins(id) as Task;
     await this.logActivity(id, userId, 'STARTED', { fromStatus: task.status, toStatus: 'IN_PROGRESS' });
-    await this.emitTaskUpdate(updated, 'TASK_STARTED', `"${updated.title}" was started`);
+    await this.emitTaskUpdate(updated, 'TASK_STARTED', `"${updated.title}" was started`, userId);
     return updated;
   }
 
@@ -249,7 +250,7 @@ export class TasksService {
       fromStatus: task.status,
       toStatus: 'FLAGGED',
     });
-    await this.emitTaskUpdate(updated, 'TASK_FLAGGED', `An issue was reported on "${updated.title}"`);
+    await this.emitTaskUpdate(updated, 'TASK_FLAGGED', `An issue was reported on "${updated.title}"`, userId);
     return updated;
   }
 
@@ -289,7 +290,7 @@ export class TasksService {
 
     const updated = await this.tasksDao.findOneWithJoins(id) as Task;
     await this.logActivity(id, userId, 'COMPLETED', { fromStatus: task.status, toStatus: 'COMPLETED' });
-    await this.emitTaskUpdate(updated, 'TASK_COMPLETED', `"${updated.title}" was completed`);
+    await this.emitTaskUpdate(updated, 'TASK_COMPLETED', `"${updated.title}" was completed`, userId);
     return updated;
   }
 
@@ -303,7 +304,28 @@ export class TasksService {
 
     const updated = await this.tasksDao.findOneWithJoins(id) as Task;
     await this.logActivity(id, userId, 'CANCELLED', { fromStatus: task.status, toStatus: 'CANCELLED' });
-    await this.emitTaskUpdate(updated, 'TASK_CANCELLED', `"${updated.title}" was cancelled`);
+    await this.emitTaskUpdate(updated, 'TASK_CANCELLED', `"${updated.title}" was cancelled`, userId);
+    return { success: true };
+  }
+
+  // Soft delete: the row stays (is_deleted/deleted_at) together with its activity log.
+  async deleteTask(id: string, userId: string, agencyId: string): Promise<{ success: boolean }> {
+    const task = await this.tasksDao.findOneWithJoins(id);
+    if (!task || task.agency_id !== agencyId) throw new NotFoundException('Task not found');
+    if (task.created_by_id !== userId) throw new ForbiddenException('Only the task creator can delete');
+    await this.tasksDao.deleteById(id);
+    await this.logActivity(id, userId, 'DELETED', { fromStatus: task.status });
+
+    // No emitTaskUpdate here: its notification links to a task that no longer opens.
+    const message = `"${task.title}" was deleted`;
+    for (const agencyUserId of new Set([task.created_by_id, task.assigned_to_id])) {
+      const recipient = await this.resolveUserId(agencyUserId);
+      if (!recipient) continue;
+      this.webSocketService.broadcastToUser(recipient, 'task_updated', { type: 'TASK_DELETED', task, message, actor_id: userId });
+      if (agencyUserId !== userId) {
+        this.notificationsService.notify(recipient, 'TASK_DELETED', task.title, { message, subject: task.title });
+      }
+    }
     return { success: true };
   }
 
@@ -334,7 +356,7 @@ export class TasksService {
 
     const updated = await this.tasksDao.findOneWithJoins(id) as Task;
     await this.logActivity(id, supervisorId, 'REASSIGNED', { fromStatus: task.status, toStatus: 'PENDING' });
-    await this.emitTaskUpdate(updated, 'TASK_REASSIGNED', `"${updated.title}" was reassigned`, [previousAssigneeId]);
+    await this.emitTaskUpdate(updated, 'TASK_REASSIGNED', `"${updated.title}" was reassigned`, supervisorId, [previousAssigneeId]);
     return updated;
   }
 
@@ -353,7 +375,7 @@ export class TasksService {
 
     const updated = await this.tasksDao.findOneWithJoins(id) as Task;
     await this.logActivity(id, supervisorId, 'CLOSED', { fromStatus: task.status, toStatus: 'COMPLETED' });
-    await this.emitTaskUpdate(updated, 'TASK_CLOSED', `"${updated.title}" was closed`);
+    await this.emitTaskUpdate(updated, 'TASK_CLOSED', `"${updated.title}" was closed`, supervisorId);
     return updated;
   }
 
@@ -376,9 +398,9 @@ export class TasksService {
       toStatus,
     });
     if (dto.action === 'cancel') {
-      await this.emitTaskUpdate(updated, 'TASK_CANCELLED_ON_PROBLEM', `"${updated.title}" was cancelled after a reported issue`);
+      await this.emitTaskUpdate(updated, 'TASK_CANCELLED_ON_PROBLEM', `"${updated.title}" was cancelled after a reported issue`, supervisorId);
     } else {
-      await this.emitTaskUpdate(updated, 'TASK_CONTINUE_APPROVED', `"${updated.title}" can be resumed`);
+      await this.emitTaskUpdate(updated, 'TASK_CONTINUE_APPROVED', `"${updated.title}" can be resumed`, supervisorId);
     }
     return updated;
   }
@@ -394,7 +416,7 @@ export class TasksService {
 
     const updated = await this.tasksDao.findOneWithJoins(id) as Task;
     await this.logActivity(id, userId, 'RESUMED', { fromStatus: 'CONTINUE', toStatus: 'IN_PROGRESS' });
-    await this.emitTaskUpdate(updated, 'TASK_RESUMED', `"${updated.title}" was resumed`);
+    await this.emitTaskUpdate(updated, 'TASK_RESUMED', `"${updated.title}" was resumed`, userId);
     return updated;
   }
 }

@@ -183,8 +183,27 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
     return records as Pilgrim[];
   }
 
+  /**
+   * Shared WHERE for the paginated lists. Besides plain pilgrim columns it accepts
+   * `has_group` (boolean): whether the pilgrim is already a member of any group.
+   */
+  private applyListFilters(builder: Knex.QueryBuilder, where: Partial<Pilgrim> & { has_group?: boolean }) {
+    Object.entries(where).forEach(([key, value]) => {
+      if (key === 'is_deleted' || key === 'has_group') return;
+      builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
+    });
+    builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
+    if (where.has_group !== undefined) {
+      const members = this.db(TABLE_NAMES.GROUP_MEMBERS)
+        .select(this.db.raw('1'))
+        .whereRaw(`${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id`);
+      if (where.has_group) builder.whereExists(members);
+      else builder.whereNotExists(members);
+    }
+  }
+
   async findManyPaginated(
-    where: Partial<Pilgrim> = {},
+    where: Partial<Pilgrim> & { has_group?: boolean } = {},
     pageIndex: number = 1,
     pageSize: number = 10,
     trx?: Knex.Transaction,
@@ -195,14 +214,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
 
     const [{ count }] = await this.qb(trx)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
-      .where((builder) => {
-        Object.entries(where).forEach(([key, value]) => {
-          if (key !== 'is_deleted') {
-            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
-          }
-        });
-        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
-      })
+      .where((builder) => this.applyListFilters(builder, where))
       .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
       .count('* as count');
 
@@ -214,15 +226,13 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+        this.db.raw(
+          `(SELECT json_build_object('id', g.id, 'name', g.name) FROM ${TABLE_NAMES.GROUP_MEMBERS} gm
+            JOIN ${TABLE_NAMES.GROUPS} g ON g.id = gm.group_id
+            WHERE gm.pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id LIMIT 1) as "group"`,
+        ),
       )
-      .where((builder) => {
-        Object.entries(where).forEach(([key, value]) => {
-          if (key !== 'is_deleted') {
-            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
-          }
-        });
-        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
-      })
+      .where((builder) => this.applyListFilters(builder, where))
       .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
       .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc')
       .limit(pageSize)
@@ -237,7 +247,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
   }
 
   async findManyPaginatedWithPhone(
-    where: Partial<Pilgrim> = {},
+    where: Partial<Pilgrim> & { has_group?: boolean } = {},
     phone: string,
     pageIndex: number = 1,
     pageSize: number = 10,
@@ -249,14 +259,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
 
     const [{ count }] = await this.qb(trx)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
-      .where((builder) => {
-        Object.entries(where).forEach(([key, value]) => {
-          if (key !== 'is_deleted') {
-            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
-          }
-        });
-        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
-      })
+      .where((builder) => this.applyListFilters(builder, where))
       .where(`${TABLE_NAMES.PILGRIMS}.phone`, 'ILIKE', `%${phone}%`)
       .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
       .count('* as count');
@@ -269,15 +272,13 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
+        this.db.raw(
+          `(SELECT json_build_object('id', g.id, 'name', g.name) FROM ${TABLE_NAMES.GROUP_MEMBERS} gm
+            JOIN ${TABLE_NAMES.GROUPS} g ON g.id = gm.group_id
+            WHERE gm.pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id LIMIT 1) as "group"`,
+        ),
       )
-      .where((builder) => {
-        Object.entries(where).forEach(([key, value]) => {
-          if (key !== 'is_deleted') {
-            builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
-          }
-        });
-        builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
-      })
+      .where((builder) => this.applyListFilters(builder, where))
       .where(`${TABLE_NAMES.PILGRIMS}.phone`, 'ILIKE', `%${phone}%`)
       .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
       .orderBy(`${TABLE_NAMES.PILGRIMS}.created_at`, 'desc')

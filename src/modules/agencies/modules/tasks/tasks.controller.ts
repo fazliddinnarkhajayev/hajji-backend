@@ -153,6 +153,12 @@ export class TasksController {
     return this.service.cancelTask(id, user.agencyUser.id, user.agency_id);
   }
 
+  // creator: soft-delete a task
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.deleteTask(id, user.agencyUser.id, user.agency_id);
+  }
+
   // supervisor: reassign to a different manager they supervise
   @Patch(':id/reassign')
   reassign(
