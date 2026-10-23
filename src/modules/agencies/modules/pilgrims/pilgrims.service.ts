@@ -54,7 +54,7 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   }
 
   async getAgencyPilgrims(user: any, query: any) {
-    const { page = '1', limit = '10', phone, is_guide } = query;
+    const { page = '1', limit = '10', phone, is_guide, has_group } = query;
     const pageIndex = parseInt(page, 10);
     const pageSize = parseInt(limit, 10);
 
@@ -64,6 +64,11 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     // Apply is_guide filter if provided
     if (is_guide !== undefined) {
       where.is_guide = is_guide === 'true';
+    }
+
+    // has_group=false → only pilgrims not yet in any group (for "add member" pickers)
+    if (has_group !== undefined) {
+      where.has_group = has_group === 'true';
     }
 
     // Apply phone filter if provided (using ILIKE for case-insensitive partial matching)

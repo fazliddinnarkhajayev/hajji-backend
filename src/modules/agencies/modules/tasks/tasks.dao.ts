@@ -25,7 +25,8 @@ export type TaskActivityAction =
   | 'COMPLETED'
   | 'CANCELLED'
   | 'REASSIGNED'
-  | 'CLOSED';
+  | 'CLOSED'
+  | 'DELETED';
 
 export interface TaskActivityLog {
   id: string;
