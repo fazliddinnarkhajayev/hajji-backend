@@ -193,11 +193,12 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
 
   /**
    * Shared WHERE for the paginated lists. Besides plain pilgrim columns it accepts
-   * `has_group` (boolean): whether the pilgrim is already a member of any group.
+   * `has_group` (boolean): whether the pilgrim is already a member of any group, and
+   * `q`: part of the name, phone, PINFL or passport number.
    */
-  private applyListFilters(builder: Knex.QueryBuilder, where: Partial<Pilgrim> & { has_group?: boolean }) {
+  private applyListFilters(builder: Knex.QueryBuilder, where: Partial<Pilgrim> & { has_group?: boolean; q?: string }) {
     Object.entries(where).forEach(([key, value]) => {
-      if (key === 'is_deleted' || key === 'has_group') return;
+      if (key === 'is_deleted' || key === 'has_group' || key === 'q') return;
       builder.where(`${TABLE_NAMES.PILGRIMS}.${key}`, value);
     });
     builder.where(`${TABLE_NAMES.PILGRIMS}.is_deleted`, false);
@@ -208,10 +209,22 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       if (where.has_group) builder.whereExists(members);
       else builder.whereNotExists(members);
     }
+    const q = where.q?.trim();
+    if (q) {
+      const P = TABLE_NAMES.PILGRIMS;
+      const like = `%${q.replace(/[\\%_]/g, (c) => '\\' + c)}%`;
+      const digits = q.replace(/\D/g, '');
+      builder.where((b) => {
+        b.whereRaw(`concat_ws(' ', ${P}.first_name, ${P}.middle_name, ${P}.last_name) ILIKE ?`, [like])
+          .orWhereRaw(`concat_ws(' ', ${P}.last_name, ${P}.first_name) ILIKE ?`, [like])
+          .orWhere(`${P}.passport_number`, 'ilike', like);
+        if (digits.length >= 3) b.orWhere(`${P}.phone`, 'like', `%${digits}%`).orWhere(`${P}.pinfl`, 'like', `%${digits}%`);
+      });
+    }
   }
 
   async findManyPaginated(
-    where: Partial<Pilgrim> & { has_group?: boolean } = {},
+    where: Partial<Pilgrim> & { has_group?: boolean; q?: string } = {},
     pageIndex: number = 1,
     pageSize: number = 10,
     trx?: Knex.Transaction,
@@ -255,7 +268,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
   }
 
   async findManyPaginatedWithPhone(
-    where: Partial<Pilgrim> & { has_group?: boolean } = {},
+    where: Partial<Pilgrim> & { has_group?: boolean; q?: string } = {},
     phone: string,
     pageIndex: number = 1,
     pageSize: number = 10,

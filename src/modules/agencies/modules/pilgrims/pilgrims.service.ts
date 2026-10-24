@@ -173,7 +173,7 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   }
 
   async getAgencyPilgrims(user: any, query: any) {
-    const { page = '1', limit = '10', phone, is_guide, has_group } = query;
+    const { page = '1', limit = '10', phone, is_guide, has_group, q } = query;
     const pageIndex = parseInt(page, 10);
     const pageSize = parseInt(limit, 10);
 
@@ -189,6 +189,9 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     if (has_group !== undefined) {
       where.has_group = has_group === 'true';
     }
+
+    // q → name / phone / PINFL / passport number
+    if (q) where.q = String(q);
 
     // Apply phone filter if provided (using ILIKE for case-insensitive partial matching)
     if (phone) {
