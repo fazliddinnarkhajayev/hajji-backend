@@ -10,7 +10,32 @@ export interface GroupMember {
   pilgrim_id: string;
   joined_at: Date;
   created_at: Date;
+  visa_status?: string;
+  visa_number?: string | null;
+  visa_issued_at?: Date | string | null;
+  visa_expires_at?: Date | string | null;
+  ticket_status?: string;
+  ticket_number?: string | null;
+  flight_number?: string | null;
+  flight_date?: Date | string | null;
+  pnr?: string | null;
+  documents_note?: string | null;
+  documents_updated_at?: Date | null;
+  documents_updated_by_id?: string | null;
 }
+
+/** Membership columns that hold the visa / ticket state. */
+export const MEMBER_DOCUMENT_COLUMNS = [
+  'visa_status', 'visa_number', 'visa_issued_at', 'visa_expires_at',
+  'ticket_status', 'ticket_number', 'flight_number', 'flight_date', 'pnr',
+  'documents_note', 'documents_updated_at',
+] as const;
+
+/** Pilgrim columns needed for visa / ticket paperwork. */
+export const PILGRIM_PASSPORT_COLUMNS = [
+  'first_name', 'last_name', 'middle_name', 'birth_date', 'gender', 'citizenship',
+  'passport_number', 'passport_issued_at', 'passport_expires_at', 'pinfl', 'phone',
+] as const;
 
 @Injectable()
 export class GroupMembersDao extends BaseDao<GroupMember> {
@@ -88,12 +113,38 @@ export class GroupMembersDao extends BaseDao<GroupMember> {
         `${TABLE_NAMES.PILGRIMS}.phone`,
         `${TABLE_NAMES.PILGRIMS}.email`,
         `${TABLE_NAMES.PILGRIMS}.agency_id`,
+        ...MEMBER_DOCUMENT_COLUMNS.map((c) => `${TABLE_NAMES.GROUP_MEMBERS}.${c}`),
+        ...PILGRIM_PASSPORT_COLUMNS.filter((c) => c !== 'phone').map((c) => `${TABLE_NAMES.PILGRIMS}.${c}`),
+        this.db.raw(`(${TABLE_NAMES.PILGRIMS}.passport_photo_path IS NOT NULL) as has_passport_photo`),
       )
       .orderBy(`${TABLE_NAMES.GROUP_MEMBERS}.joined_at`, 'desc')
       .limit(pageSize)
       .offset(offset);
 
     return { records: records as any[], total: Number(count) };
+  }
+
+  /** Every member with passport + visa/ticket data, in name order (for the Excel exports). */
+  async findForExport(groupId: string, trx?: Knex.Transaction): Promise<any[]> {
+    return this.qb(trx)
+      .join(TABLE_NAMES.PILGRIMS, `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`, `${TABLE_NAMES.PILGRIMS}.id`)
+      .where(`${TABLE_NAMES.GROUP_MEMBERS}.group_id`, groupId)
+      .select(
+        `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`,
+        ...MEMBER_DOCUMENT_COLUMNS.map((c) => `${TABLE_NAMES.GROUP_MEMBERS}.${c}`),
+        ...PILGRIM_PASSPORT_COLUMNS.map((c) => `${TABLE_NAMES.PILGRIMS}.${c}`),
+      )
+      .orderBy([`${TABLE_NAMES.PILGRIMS}.last_name`, `${TABLE_NAMES.PILGRIMS}.first_name`]);
+  }
+
+  /** Writes visa / ticket fields for the given members of one group; returns how many rows changed. */
+  async updateDocuments(
+    groupId: string,
+    pilgrimIds: string[],
+    patch: Partial<GroupMember>,
+    trx?: Knex.Transaction,
+  ): Promise<number> {
+    return this.qb(trx).where({ group_id: groupId }).whereIn('pilgrim_id', pilgrimIds).update(patch);
   }
 
   async checkPilgrimExistsInGroup(

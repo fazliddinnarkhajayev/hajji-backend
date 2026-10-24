@@ -4,6 +4,16 @@ import { KNEX_CONNECTION } from 'src/core/database/database.constants';
 import { TABLE_NAMES } from 'src/shared/constants';
 import { BaseDao } from 'src/shared/dao/base.dao';
 import { PaginatedResult } from 'src/shared/interfaces/pagination.interface';
+import { GroupStatus, docsIncompleteCountSql, effectiveStatusSql, membersCountSql } from 'src/shared/dao/group-status';
+
+export interface GroupListFilters {
+  /** Effective status (see shared/dao/group-status.ts). */
+  status?: GroupStatus;
+  /** Case-insensitive part of the group name. */
+  q?: string;
+}
+
+const G = TABLE_NAMES.GROUPS;
 
 export interface Group {
   id: string;
@@ -14,7 +24,8 @@ export interface Group {
   return_date: Date;
   meeting_point?: string;
   guide_pilgrim_id: string;
-  status?: 'NEW' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  /** Stored: FORMING | CANCELLED. Returned by the *WithJoins reads: the effective status. */
+  status?: GroupStatus;
   created_at?: Date;
   updated_at?: Date;
   created_by_id?: string;
@@ -22,6 +33,8 @@ export interface Group {
   is_deleted?: boolean;
   // Joined data
   members_count?: number;
+  /** Members whose visa or ticket is not ISSUED yet. */
+  docs_incomplete_count?: number;
   agency?: {
     id?: string;
     name?: string;
@@ -55,6 +68,7 @@ export class GroupsDao extends BaseDao<Group> {
         `${TABLE_NAMES.GROUPS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.PILGRIMS}.id, 'first_name', ${TABLE_NAMES.PILGRIMS}.first_name, 'last_name', ${TABLE_NAMES.PILGRIMS}.last_name) as guide_pilgrim`),
+        ...this.derivedColumns(),
       )
       .where({ [`${TABLE_NAMES.GROUPS}.id`]: id, [`${TABLE_NAMES.GROUPS}.is_deleted`]: false })
       .first();
@@ -62,11 +76,37 @@ export class GroupsDao extends BaseDao<Group> {
     return record as Group | undefined;
   }
 
+  /** members_count, docs_incomplete_count and the effective status (overrides the stored one). */
+  private derivedColumns() {
+    return [
+      this.db.raw(`${membersCountSql(G)} as members_count`),
+      this.db.raw(`${docsIncompleteCountSql(G)} as docs_incomplete_count`),
+      this.db.raw(`${effectiveStatusSql(G)} as status`),
+    ];
+  }
+
+  private applyFilters(builder: Knex.QueryBuilder, filters: GroupListFilters) {
+    if (filters.status) builder.whereRaw(`${effectiveStatusSql(G)} = ?`, [filters.status]);
+    if (filters.q && filters.q.trim()) builder.where(`${G}.name`, 'ilike', `%${filters.q.trim()}%`);
+  }
+
+  /** One row per group of the agency with what the status cards need. */
+  async findStatsRows(agencyId: string, trx?: Knex.Transaction): Promise<Array<{
+    id: string; name: string; departure_date: Date; return_date: Date;
+    status: GroupStatus; members_count: number; docs_incomplete_count: number;
+  }>> {
+    return this.qb(trx)
+      .select(`${G}.id`, `${G}.name`, `${G}.departure_date`, `${G}.return_date`, ...this.derivedColumns())
+      .where({ [`${G}.agency_id`]: agencyId, [`${G}.is_deleted`]: false })
+      .whereNull(`${G}.deleted_at`);
+  }
+
   async findManyPaginatedWithJoins(
     where: Partial<Group> = {},
     pageIndex: number = 1,
     pageSize: number = 10,
     trx?: Knex.Transaction,
+    filters: GroupListFilters = {},
   ) {
     const offset = (pageIndex - 1) * pageSize;
 
@@ -88,6 +128,7 @@ export class GroupsDao extends BaseDao<Group> {
           }
         });
         builder.where(`${TABLE_NAMES.GROUPS}.is_deleted`, false);
+        this.applyFilters(builder, filters);
       })
       .whereNull(`${TABLE_NAMES.GROUPS}.deleted_at`)
       .count('* as count');
@@ -110,7 +151,7 @@ export class GroupsDao extends BaseDao<Group> {
         `${TABLE_NAMES.GROUPS}.*`,
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.PILGRIMS}.id, 'first_name', ${TABLE_NAMES.PILGRIMS}.first_name, 'last_name', ${TABLE_NAMES.PILGRIMS}.last_name) as guide_pilgrim`),
-        this.db.raw(`(SELECT COUNT(*)::int FROM ${TABLE_NAMES.GROUP_MEMBERS} WHERE group_id = ${TABLE_NAMES.GROUPS}.id) as members_count`),
+        ...this.derivedColumns(),
       )
       .where((builder) => {
         Object.entries(where).forEach(([key, value]) => {
@@ -119,6 +160,7 @@ export class GroupsDao extends BaseDao<Group> {
           }
         });
         builder.where(`${TABLE_NAMES.GROUPS}.is_deleted`, false);
+        this.applyFilters(builder, filters);
       })
       .whereNull(`${TABLE_NAMES.GROUPS}.deleted_at`)
       .orderBy(`${TABLE_NAMES.GROUPS}.created_at`, 'desc')

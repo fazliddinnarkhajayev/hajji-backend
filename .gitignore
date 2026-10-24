@@ -37,3 +37,6 @@ temp/
 .pnpm-store/
 .npm/
 .yarn/
+
+# Passport scans (private, never committed)
+private/

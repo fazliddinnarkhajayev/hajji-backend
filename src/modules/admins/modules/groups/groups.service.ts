@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { storedGroupStatus } from 'src/shared/dao/group-status';
 import { GroupsDao, Group } from './groups.dao';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -41,7 +42,7 @@ export class GroupsService {
     const createdGroup = await this.groupsDao.transaction(async (trx) => {
       const group = await this.groupsDao.insert({
         ...dto,
-        status: 'NEW',
+        status: 'FORMING',
         created_by_id: userId,
       } as Partial<Group>, trx);
       await this.voiceKeysDao.ensure(group.id, trx);
@@ -117,6 +118,7 @@ export class GroupsService {
 
     const updated = await this.groupsDao.updateById(id, {
       ...dto,
+      status: storedGroupStatus(dto.status),
       updated_by_id: userId,
       updated_at: new Date(),
     } as Partial<Group>);
@@ -185,7 +187,7 @@ export class GroupsService {
 
   async changeStatus(
     id: string,
-    status: 'NEW' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED',
+    status: string,
     userId?: string,
   ): Promise<Group> {
     const group = await this.groupsDao.findByIdWithJoins(id);
@@ -194,7 +196,7 @@ export class GroupsService {
     }
 
     await this.groupsDao.updateById(id, {
-      status,
+      status: storedGroupStatus(status),
       updated_by_id: userId,
       updated_at: new Date(),
     } as Partial<Group>);

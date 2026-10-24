@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Param, Query, Patch, Body, Put, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Patch, Body, Put, Delete, UseGuards, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { GroupsService } from './groups.service';
 import { AgencyRoles, CurrentUser } from 'src/shared/decorators';
 import { AgencyRolesGuard } from 'src/shared/guards/agency-roles.guard';
@@ -11,6 +12,8 @@ import { UpdateRoomRequestDto } from './dto/update-room-request.dto';
 import { AddRoomRequestMemberDto } from './dto/add-room-request-member.dto';
 import { CreateRoomsDto } from './dto/create-rooms.dto';
 import { AddRoomMemberDto } from './dto/add-room-member.dto';
+import { BulkUpdateMemberDocumentsDto, UpdateMemberDocumentsDto } from './dto/update-member-documents.dto';
+import { GroupStatus } from 'src/shared/dao/group-status';
 
 /** Only agency admins (not field managers) may change groups, rooms and plans. */
 const MANAGE_ROLES = [AgencyUserRoleEnum.SUPERADMIN, AgencyUserRoleEnum.SUPERVISOR];
@@ -26,10 +29,20 @@ export class GroupsController {
     return this.groupsService.create(user.agency_id, createGroupDto);
   }
 
+  /** ?status= effective status (FORMING | FORMED | IN_TRIP | TRIP_ENDED | CANCELLED), ?q= part of the name. */
   @Get()
   async getAll(@CurrentUser() user: any, @Query() query: any) {
-    const { page = '1', limit = '10' } = query;
-    return this.groupsService.findByAgency(user.agency_id, parseInt(page, 10), parseInt(limit, 10));
+    const { page = '1', limit = '10', status, q } = query;
+    return this.groupsService.findByAgency(user.agency_id, parseInt(page, 10), parseInt(limit, 10), {
+      status: status ? (String(status) as GroupStatus) : undefined,
+      q: q ? String(q) : undefined,
+    });
+  }
+
+  /** Counts per effective status for the status cards. Declared before ':id'. */
+  @Get('stats')
+  async getStats(@CurrentUser() user: any) {
+    return this.groupsService.getStats(user.agency_id);
   }
 
   // ── Multi-segment routes before :id ───────────────────────
@@ -74,6 +87,47 @@ export class GroupsController {
     @CurrentUser() user: any,
   ) {
     return this.groupsService.removePilgrimFromGroup(groupId, user.agency_id, pilgrimId);
+  }
+
+  // ── Visa / ticket ─────────────────────────────────────────
+
+  @AgencyRoles(...MANAGE_ROLES)
+  @Patch(':groupId/members/documents')
+  async bulkUpdateMemberDocuments(
+    @Param('groupId') groupId: string,
+    @Body() dto: BulkUpdateMemberDocumentsDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.groupsService.bulkUpdateMemberDocuments(groupId, user.agency_id, dto, user.user_id ?? user.id);
+  }
+
+  @AgencyRoles(...MANAGE_ROLES)
+  @Patch(':groupId/members/:pilgrimId/documents')
+  async updateMemberDocuments(
+    @Param('groupId') groupId: string,
+    @Param('pilgrimId') pilgrimId: string,
+    @Body() dto: UpdateMemberDocumentsDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.groupsService.updateMemberDocuments(groupId, user.agency_id, pilgrimId, dto, user.user_id ?? user.id);
+  }
+
+  /** Excel list for the visa office / airline: ?type=visa | ticket. */
+  @Get(':groupId/export')
+  async exportDocuments(
+    @Param('groupId') groupId: string,
+    @Query('type') type: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.groupsService.exportDocuments(groupId, user.agency_id, type as any);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${type === 'visa' ? 'viza' : 'aviabilet'}.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(buffer);
   }
 
   @Get(':groupId/room-requests')
