@@ -13,7 +13,7 @@ export interface Group {
   return_date: Date;
   meeting_point?: string | null;
   guide_pilgrim_id: string;
-  status: 'NEW' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  status: 'FORMING' | 'CANCELLED';
   created_at?: Date;
   created_by_id?: string | null;
   updated_at?: Date;

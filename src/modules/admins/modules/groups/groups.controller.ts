@@ -79,7 +79,7 @@ export class GroupsController {
   @Patch(':id/status/:status')
   async changeStatus(
     @Param('id') id: string,
-    @Param('status') status: 'NEW' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED',
+    @Param('status') status: string,
     @CurrentUser() user: any,
   ) {
     return this.groupsService.changeStatus(id, status, user?.id);

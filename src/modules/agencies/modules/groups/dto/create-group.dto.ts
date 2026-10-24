@@ -1,4 +1,5 @@
-import { IsString, IsDateString, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsDateString, IsOptional, IsIn } from 'class-validator';
+import { GROUP_STATUSES, LEGACY_GROUP_STATUSES } from 'src/shared/dao/group-status';
 
 export class CreateGroupDto {
   @IsString()
@@ -21,7 +22,8 @@ export class CreateGroupDto {
   @IsString()
   meeting_point?: string;
 
+  /** Only CANCELLED sticks; any other value (legacy NEW/ACTIVE/COMPLETED too) means "not cancelled". */
   @IsOptional()
-  @IsEnum(['NEW', 'ACTIVE', 'COMPLETED', 'CANCELLED'])
-  status?: 'NEW' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  @IsIn([...GROUP_STATUSES, ...LEGACY_GROUP_STATUSES])
+  status?: string;
 }

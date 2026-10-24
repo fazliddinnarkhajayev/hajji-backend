@@ -1,5 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
-import { GroupsDao, Group } from 'src/modules/admins/modules/groups/groups.dao';
+import { GroupsDao, Group, GroupListFilters } from 'src/modules/admins/modules/groups/groups.dao';
+import { GROUP_STATUSES, GroupStatus, storedGroupStatus } from 'src/shared/dao/group-status';
+import { BulkUpdateMemberDocumentsDto, UpdateMemberDocumentsDto } from './dto/update-member-documents.dto';
+import { buildDocumentsWorkbook, DocumentsExportType } from './group-documents.export';
 import { PaginatedResult, PaginationMeta } from 'src/shared/interfaces/pagination.interface';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -34,7 +37,7 @@ export class GroupsService {
         agency_id: agencyId,
         departure_date: new Date(createGroupDto.departure_date),
         return_date: new Date(createGroupDto.return_date),
-        status: createGroupDto.status || 'NEW',
+        status: storedGroupStatus(createGroupDto.status) ?? 'FORMING',
       } as Partial<Group>, trx);
       await this.voiceKeysDao.ensure(group.id, trx);
       return group;
@@ -53,8 +56,66 @@ export class GroupsService {
     return r;
   }
 
-  async findByAgency(agencyId: string, pageIndex = 1, pageSize = 10): Promise<PaginatedResult<Group>> {
-    return this.groupsDao.findManyPaginatedWithJoins({ agency_id: agencyId } as Partial<Group>, pageIndex, pageSize);
+  async findByAgency(
+    agencyId: string,
+    pageIndex = 1,
+    pageSize = 10,
+    filters: GroupListFilters = {},
+  ): Promise<PaginatedResult<Group>> {
+    if (filters.status && !(GROUP_STATUSES as readonly string[]).includes(filters.status)) {
+      throw new BadRequestException('Unknown group status');
+    }
+    return this.groupsDao.findManyPaginatedWithJoins({ agency_id: agencyId } as Partial<Group>, pageIndex, pageSize, undefined, filters);
+  }
+
+  /**
+   * Numbers for the status cards on the agency "Groups" page: per effective status the group and
+   * people counts plus the one hint each card shows.
+   */
+  async getStats(agencyId: string) {
+    const rows = await this.groupsDao.findStatsRows(agencyId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const day = (d: Date | string) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const DAY = 86_400_000;
+
+    const by = Object.fromEntries(GROUP_STATUSES.map((s) => [s, { groups: 0, members: 0 }])) as Record<GroupStatus, { groups: number; members: number }>;
+    for (const r of rows) {
+      by[r.status].groups += 1;
+      by[r.status].members += r.members_count;
+    }
+    const of = (s: GroupStatus) => rows.filter((r) => r.status === s);
+    const earliest = (list: typeof rows, key: 'departure_date' | 'return_date', dir: 1 | -1) =>
+      list.slice().sort((a, b) => dir * (new Date(a[key]).getTime() - new Date(b[key]).getTime()))[0];
+
+    const preparing = [...of('FORMING'), ...of('FORMED')];
+    const next = earliest(preparing, 'departure_date', 1);
+    const last = earliest(of('TRIP_ENDED'), 'return_date', -1);
+
+    return {
+      total: { groups: rows.length, members: rows.reduce((n, r) => n + r.members_count, 0) },
+      FORMING: {
+        ...by.FORMING,
+        docs_incomplete_groups: of('FORMING').filter((r) => r.docs_incomplete_count > 0).length,
+        docs_incomplete_members: of('FORMING').reduce((n, r) => n + r.docs_incomplete_count, 0),
+        empty_groups: of('FORMING').filter((r) => r.members_count === 0).length,
+      },
+      FORMED: { ...by.FORMED },
+      IN_TRIP: {
+        ...by.IN_TRIP,
+        docs_incomplete_groups: of('IN_TRIP').filter((r) => r.docs_incomplete_count > 0).length,
+        trips: of('IN_TRIP').map((r) => ({
+          id: r.id,
+          name: r.name,
+          day: Math.floor((today.getTime() - day(r.departure_date).getTime()) / DAY) + 1,
+          total_days: Math.floor((day(r.return_date).getTime() - day(r.departure_date).getTime()) / DAY) + 1,
+          return_date: r.return_date,
+        })),
+      },
+      TRIP_ENDED: { ...by.TRIP_ENDED, last_return: last ? { id: last.id, name: last.name, return_date: last.return_date } : null },
+      CANCELLED: { ...by.CANCELLED },
+      next_departure: next ? { id: next.id, name: next.name, departure_date: next.departure_date, status: next.status } : null,
+    };
   }
 
   async findOne(id: string, agencyId: string): Promise<Group> {
@@ -66,7 +127,8 @@ export class GroupsService {
 
   async update(id: string, agencyId: string, updateGroupDto: UpdateGroupDto): Promise<Group | undefined> {
     await this.findOne(id, agencyId);
-    return this.groupsDao.updateById(id, updateGroupDto);
+    await this.groupsDao.updateById(id, { ...updateGroupDto, status: storedGroupStatus(updateGroupDto.status) } as Partial<Group>);
+    return this.groupsDao.findByIdWithJoins(id);
   }
 
   async remove(id: string, agencyId: string): Promise<{ success: boolean }> {
@@ -159,6 +221,43 @@ export class GroupsService {
       page_size: pageSize,
       page_index: pageIndex,
     });
+  }
+
+  // ── Visa / ticket ──────────────────────────────────────────
+
+  private documentsPatch(dto: UpdateMemberDocumentsDto, userId?: string) {
+    const keys = ['visa_status', 'visa_number', 'visa_issued_at', 'visa_expires_at', 'ticket_status',
+      'ticket_number', 'flight_number', 'flight_date', 'pnr', 'documents_note'] as const;
+    const patch: Record<string, unknown> = {};
+    for (const k of keys) if (dto[k] !== undefined) patch[k] = dto[k];
+    if (Object.keys(patch).length === 0) throw new BadRequestException('Nothing to update');
+    patch.documents_updated_at = new Date();
+    patch.documents_updated_by_id = userId ?? null;
+    return patch;
+  }
+
+  async updateMemberDocuments(groupId: string, agencyId: string, pilgrimId: string, dto: UpdateMemberDocumentsDto, userId?: string) {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    const changed = await this.groupMembersDao.updateDocuments(groupId, [pilgrimId], this.documentsPatch(dto, userId) as any);
+    if (!changed) throw new BadRequestException('Pilgrim is not a member of this group');
+    return this.groupsDao.findByIdWithJoins(groupId);
+  }
+
+  async bulkUpdateMemberDocuments(groupId: string, agencyId: string, dto: BulkUpdateMemberDocumentsDto, userId?: string) {
+    await this.verifyGroupOwnership(groupId, agencyId);
+    const { pilgrim_ids, ...rest } = dto;
+    const updated = await this.groupMembersDao.updateDocuments(groupId, Array.from(new Set(pilgrim_ids)), this.documentsPatch(rest, userId) as any);
+    const group = await this.groupsDao.findByIdWithJoins(groupId);
+    return { updated, group };
+  }
+
+  async exportDocuments(groupId: string, agencyId: string, type: DocumentsExportType): Promise<{ buffer: Buffer; filename: string }> {
+    if (type !== 'visa' && type !== 'ticket') throw new BadRequestException('type must be visa or ticket');
+    const group = await this.findOne(groupId, agencyId);
+    const members = await this.groupMembersDao.findForExport(groupId);
+    const buffer = await buildDocumentsWorkbook(type, group, members);
+    const safe = group.name.replace(/[^\p{L}\p{N}\- ]+/gu, '').trim().replace(/\s+/g, '_') || 'guruh';
+    return { buffer, filename: `${safe}_${type === 'visa' ? 'viza' : 'aviabilet'}.xlsx` };
   }
 
   // ── Room Requests ──────────────────────────────────────────

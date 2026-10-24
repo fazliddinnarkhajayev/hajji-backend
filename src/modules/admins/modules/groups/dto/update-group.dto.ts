@@ -6,5 +6,6 @@ export class UpdateGroupDto {
   return_date?: Date;
   meeting_point?: string;
   guide_pilgrim_id?: string;
-  status?: 'NEW' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  /** Only CANCELLED sticks (see shared/dao/group-status.ts). */
+  status?: string;
 }

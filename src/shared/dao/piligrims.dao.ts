@@ -18,6 +18,14 @@ export interface Pilgrim {
   district_id?: string | null;
   agency_id?: string | null;
   pinfl?: string | null;
+  birth_date?: Date | string | null;
+  gender?: 'MALE' | 'FEMALE' | null;
+  citizenship?: string | null;
+  passport_number?: string | null;
+  passport_issued_at?: Date | string | null;
+  passport_expires_at?: Date | string | null;
+  /** Relative to <cwd>/private; served only through the agency endpoint. */
+  passport_photo_path?: string | null;
   language?: string;
   user_id: string;
   status: 'ACTIVE' | 'BLOCKED';
