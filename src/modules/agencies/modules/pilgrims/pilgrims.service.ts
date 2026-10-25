@@ -38,6 +38,14 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   async create(dto: CreatePilgrimDto, user: any): Promise<Pilgrim> {
     const run = async (t: Knex.Transaction) => {
       const phone = this.sundryService.normalizePhone(dto.phone);
+      // Phone (the OTP login) and PINFL are unique: say which one is taken instead of a 500.
+      // Usually it's someone who already uses the app, who joins through an invitation.
+      if (await t(TABLE_NAMES.USERS).where({ username: phone }).first('id')) {
+        throw new BadRequestException('Phone is already used by another account');
+      }
+      if (dto.pinfl && await t(TABLE_NAMES.PILGRIMS).where({ pinfl: dto.pinfl }).first('id')) {
+        throw new BadRequestException('PINFL is already used by another pilgrim');
+      }
       const newUser = await this.usersService.create(
         {
           username: phone,
@@ -66,7 +74,13 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
       );
     };
 
-    return this.transaction(run);
+    try {
+      return await this.transaction(run);
+    } catch (err: any) {
+      // A concurrent create can still hit the unique indexes after the checks above.
+      if (err?.code === '23505') throw new BadRequestException('PINFL or phone is already used by another pilgrim');
+      throw err;
+    }
   }
 
   /** The pilgrim, if it belongs to this agency (404 otherwise, so ids of other agencies don't leak). */
