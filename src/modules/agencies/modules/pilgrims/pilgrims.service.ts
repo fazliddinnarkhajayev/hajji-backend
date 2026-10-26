@@ -187,7 +187,7 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
   }
 
   async getAgencyPilgrims(user: any, query: any) {
-    const { page = '1', limit = '10', phone, is_guide, has_group, q } = query;
+    const { page = '1', limit = '10', phone, is_guide, has_group, has_passport, q } = query;
     const pageIndex = parseInt(page, 10);
     const pageSize = parseInt(limit, 10);
 
@@ -203,6 +203,9 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     if (has_group !== undefined) {
       where.has_group = has_group === 'true';
     }
+
+    // has_passport=true → only pilgrims whose passport is entered (documents page)
+    if (has_passport === 'true') where.has_passport = true;
 
     // q → name / phone / PINFL / passport number
     if (q) where.q = String(q);
