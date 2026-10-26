@@ -30,6 +30,8 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
 
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+  // The public site only proxies /api to this server, so attachments are served there too.
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: `/${apiPrefix}/uploads` });
 
   await app.listen(port);
   console.log(`✅ Server running on http://localhost:${port}/${apiPrefix}`);
