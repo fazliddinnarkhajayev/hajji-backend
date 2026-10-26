@@ -139,4 +139,36 @@ export class DashboardDao {
       );
     return row as unknown as { count: number; older_3d: number };
   }
+
+  /**
+   * Latest events across the agency, newest first: sign-ups, answered invitations, new groups and
+   * completed tasks. Built from the tables themselves, there is no separate activity log.
+   */
+  async recent(agencyId: string, limit: number) {
+    const name = (p: string) => `NULLIF(TRIM(CONCAT_WS(' ', ${p}.first_name, ${p}.last_name)), '')`;
+    const { rows } = await this.db.raw(
+      `SELECT * FROM (
+         SELECT 'PILGRIM_CREATED' AS type, p.id AS ref_id, ${name('p')} AS name, p.created_at AS at
+           FROM ${P} p
+          WHERE p.agency_id = :a AND p.is_deleted = false AND p.deleted_at IS NULL
+         UNION ALL
+         SELECT 'INVITATION_' || i.status, i.pilgrim_id, ${name('ip')}, i.updated_at
+           FROM ${TABLE_NAMES.INVITATIONS} i JOIN ${P} ip ON ip.id = i.pilgrim_id
+          WHERE i.agency_id = :a AND i.status IN ('ACCEPTED', 'REJECTED')
+         UNION ALL
+         SELECT 'GROUP_CREATED', g.id, g.name, g.created_at
+           FROM ${G} g
+          WHERE g.agency_id = :a AND g.is_deleted = false AND g.deleted_at IS NULL
+         UNION ALL
+         SELECT 'TASK_COMPLETED', t.id, t.title, t.completed_at
+           FROM ${TABLE_NAMES.TASKS} t
+          WHERE t.agency_id = :a AND t.is_deleted = false AND t.status = 'COMPLETED' AND t.completed_at IS NOT NULL
+       ) e
+       WHERE e.at IS NOT NULL
+       ORDER BY e.at DESC
+       LIMIT :limit`,
+      { a: agencyId, limit },
+    );
+    return rows as { type: string; ref_id: string; name: string | null; at: Date }[];
+  }
 }

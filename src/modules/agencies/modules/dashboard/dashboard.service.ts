@@ -6,6 +6,7 @@ export const DEFAULT_TZ = 'Asia/Tashkent';
 /** "Upcoming" departures: from today up to this many days ahead. */
 const UPCOMING_DAYS = 60;
 const UPCOMING_LIMIT = 5;
+const RECENT_LIMIT = 8;
 
 /** YYYY-MM-DD of `date` in zone `tz`. */
 function dayIn(tz: string, date = new Date()) {
@@ -38,12 +39,13 @@ export class DashboardService {
       throw new BadRequestException('Unknown time zone');
     }
 
-    const [groups, passports, pilgrims, tasks, invitations] = await Promise.all([
+    const [groups, passports, pilgrims, tasks, invitations, recent] = await Promise.all([
       this.dao.groups(agencyId, tz),
       this.dao.passports(agencyId, tz),
       this.dao.pilgrims(agencyId, tz),
       this.dao.overdueTasks(agencyId),
       this.dao.pendingInvitations(agencyId),
+      this.dao.recent(agencyId, RECENT_LIMIT),
     ]);
 
     const today = dayIn(tz);
@@ -106,6 +108,7 @@ export class DashboardService {
         invitations_pending: { count: invitations.count, older_3d: invitations.older_3d },
         empty_groups: { count: empty.length, first: empty[0] ? brief(empty[0]) : null },
       },
+      recent,
     };
   }
 }
