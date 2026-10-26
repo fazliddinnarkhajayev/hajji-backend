@@ -6,8 +6,9 @@ import { GroupsModule } from './groups/groups.module';
 import { AgencyUsersManagementModule } from './users/users.module';
 import { GroupPlansModule } from './plans/plans.module';
 import { TasksModule } from './tasks/tasks.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
-  imports: [AgencyProfileModule, AgencyPilgrimsModule, InvitationsModule, GroupsModule, AgencyUsersManagementModule, GroupPlansModule, TasksModule],
+  imports: [AgencyProfileModule, AgencyPilgrimsModule, InvitationsModule, GroupsModule, AgencyUsersManagementModule, GroupPlansModule, TasksModule, DashboardModule],
 })
 export class AgencyModulesModule {}
