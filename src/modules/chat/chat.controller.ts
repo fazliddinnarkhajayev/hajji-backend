@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -8,6 +8,7 @@ import { CurrentUser } from 'src/shared/decorators';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 
+/** Chat attachments: images, PDF, Word and Excel only. */
 const ALLOWED_ATTACHMENTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx', '.xls', '.xlsx'];
 
 @Controller('chat')
@@ -46,7 +47,9 @@ export class ChatController {
       }),
       fileFilter: (_req, file, cb) => {
         const ext = extname(file.originalname).toLowerCase();
-        cb(null, ALLOWED_ATTACHMENTS.includes(ext));
+        // Refuse loudly: a silently dropped file would surface as "Message must have text or a file".
+        if (ALLOWED_ATTACHMENTS.includes(ext)) cb(null, true);
+        else cb(new BadRequestException('File type not allowed. Allowed: images, PDF, Word, Excel'), false);
       },
       limits: { fileSize: 20 * 1024 * 1024 },
     }),
