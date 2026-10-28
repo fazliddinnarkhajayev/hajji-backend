@@ -28,10 +28,12 @@ export class SmsService {
   /** Sends the OTP over SMS, routing by phone prefix. `phone` = digits only. */
   async sendOtp(phone: string, code: string | number): Promise<boolean> {
     const text = `Tasdiqlash kodi: ${code}`;
+    console.log(`Sending OTP to ${phone}: ${text}`);
     try {
       if (phone.startsWith('998')) return await this.sendSmsLocal(phone, text);
       if (phone.startsWith('992')) return await this.sendSmsOson(phone, text);
       if (phone.startsWith('79')) return await this.sendSmsRu(phone, code);
+      console.log(`Routing OTP to SendPulse global for ${phone}`);
       return await this.sendSmsGlobal(phone, text);
     } catch (err: any) {
       this.logger.error(`sendOtp failed for ${phone}: ${err?.message}`);
@@ -70,6 +72,7 @@ export class SmsService {
   private async sendSmsLocal(phone: string, text: string): Promise<boolean> {
     const auth = this.cfg('SMS_LOCAL_AUTH'); // "login:password"
     const originator = this.cfg('SMS_LOCAL_ORIGINATOR', '3700');
+    console.log(auth, originator);
     if (!auth) {
       this.logger.warn('SMS_LOCAL_AUTH not configured');
       return false;
