@@ -71,8 +71,6 @@ export class SmsService {
   // Uzbekistan (998) — smsxabar.uz broker API
   private async sendSmsLocal(phone: string, text: string): Promise<boolean> {
     const auth = this.cfg('SMS_LOCAL_AUTH'); // "login:password"
-    const originator = this.cfg('SMS_LOCAL_ORIGINATOR', '3700');
-    console.log(auth, originator);
     if (!auth) {
       this.logger.warn('SMS_LOCAL_AUTH not configured');
       return false;
@@ -88,7 +86,7 @@ export class SmsService {
           {
             recipient: phone,
             'message-id': 'a' + Date.now().toString(),
-            sms: { originator, content: { text } },
+            sms: { originator: '3700', content: { text } },
           },
         ],
       }),
