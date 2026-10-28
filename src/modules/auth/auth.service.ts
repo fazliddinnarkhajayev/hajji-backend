@@ -240,8 +240,8 @@ export class AuthService {
     // nothing is sent. The session is still stored, so verify + register work
     // as usual. Set SMS_MOCK=false once an SMS provider is live.
     const smsMock =
-      dto.method !== "TELEGRAM" &&
-      this.configService.get<string>("SMS_MOCK") !== "false";
+    dto.method !== "TELEGRAM" &&
+    this.configService.get<string>("SMS_MOCK") == "true";
 
     // Generate OTP code (6 digits)
     const code = smsMock ? SMS_MOCK_CODE : String(randomInt(100000, 999999));
