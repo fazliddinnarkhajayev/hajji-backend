@@ -132,11 +132,14 @@ export class GroupsService {
       throw new NotFoundException('Group not found');
     }
 
-    await this.groupsDao.updateById(id, {
-      is_deleted: true,
-      deleted_at: new Date(),
-      deleted_by_id: userId,
-    } as Partial<Group>);
+    await this.groupMembersDao.transaction(async (trx) => {
+      await this.groupMembersDao.releaseGroup(id, trx);
+      await this.groupsDao.updateById(id, {
+        is_deleted: true,
+        deleted_at: new Date(),
+        deleted_by_id: userId,
+      } as Partial<Group>, trx);
+    });
   }
 
   async getRoomRequests(groupId: string): Promise<RoomRequestWithMembers[]> {

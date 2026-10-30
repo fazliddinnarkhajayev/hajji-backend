@@ -352,8 +352,14 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
           .where({ [`${TABLE_NAMES.GROUPS}.is_deleted`]: false })
           .whereNull(`${TABLE_NAMES.GROUPS}.deleted_at`);
       } else {
+        // Deleted groups are matched in the join itself, so a guide whose only group was
+        // deleted counts as free again.
         baseQuery = baseQuery
-          .leftJoin(TABLE_NAMES.GROUPS, `${TABLE_NAMES.PILGRIMS}.id`, `${TABLE_NAMES.GROUPS}.guide_pilgrim_id`)
+          .leftJoin(TABLE_NAMES.GROUPS, (join) => {
+            join.on(`${TABLE_NAMES.PILGRIMS}.id`, '=', `${TABLE_NAMES.GROUPS}.guide_pilgrim_id`)
+              .andOn(`${TABLE_NAMES.GROUPS}.is_deleted`, '=', this.db.raw('false'))
+              .andOnNull(`${TABLE_NAMES.GROUPS}.deleted_at`);
+          })
           .whereNull(`${TABLE_NAMES.GROUPS}.id`);
       }
 
