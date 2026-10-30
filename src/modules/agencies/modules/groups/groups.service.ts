@@ -133,7 +133,10 @@ export class GroupsService {
 
   async remove(id: string, agencyId: string): Promise<{ success: boolean }> {
     await this.findOne(id, agencyId);
-    await this.groupsDao.deleteById(id);
+    await this.db.transaction(async (trx) => {
+      await this.groupMembersDao.releaseGroup(id, trx);
+      await this.groupsDao.deleteById(id, trx);
+    });
     return { success: true };
   }
 

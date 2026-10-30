@@ -67,6 +67,22 @@ export class GroupMembersDao extends BaseDao<GroupMember> {
     return record as GroupMember;
   }
 
+  /**
+   * Frees every pilgrim of a group that is being deleted: its memberships, room and room-request
+   * places. Groups are soft-deleted, so the FK cascades never fire, and these rows are unique per
+   * pilgrim: left behind, they keep the pilgrims out of every other group.
+   */
+  async releaseGroup(groupId: string, trx?: Knex.Transaction): Promise<void> {
+    const q = (table: string) => (trx ? trx(table) : this.db(table));
+    await q(TABLE_NAMES.ROOM_MEMBERS)
+      .whereIn('room_id', q(TABLE_NAMES.ROOMS).select('id').where({ group_id: groupId }))
+      .delete();
+    await q(TABLE_NAMES.ROOM_REQUEST_MEMBERS)
+      .whereIn('room_request_id', q(TABLE_NAMES.ROOM_REQUESTS).select('id').where({ group_id: groupId }))
+      .delete();
+    await this.qb(trx).where({ group_id: groupId }).delete();
+  }
+
   async removePilgrimFromGroup(pilgrimId: string, trx?: Knex.Transaction): Promise<boolean> {
     const affected = await this.qb(trx).where({ pilgrim_id: pilgrimId }).delete();
     return affected > 0;
