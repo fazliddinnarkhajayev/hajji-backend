@@ -374,12 +374,10 @@ export class AuthService {
     if (
       !dto.first_name ||
       !dto.last_name ||
-      !dto.phone ||
-      !dto.pinfl ||
-      !dto.country_id
+      !dto.phone
     ) {
       throw new BadRequestException(
-        "Missing required fields: first_name, last_name, phone, pinfl, country_id",
+        "Missing required fields: first_name, last_name, phone",
       );
     }
 
@@ -411,18 +409,22 @@ export class AuthService {
       }
 
       // Check if a pilgrim with this PINFL already exists
-      const existingPinfl = await this.pilgrimsDao.findByPinfl(dto.pinfl, trx);
-      if (existingPinfl) {
-        throw new ConflictException("PINFL is already registered");
+      if (dto.pinfl) {
+        const existingPinfl = await this.pilgrimsDao.findByPinfl(dto.pinfl, trx);
+        if (existingPinfl) {
+          throw new ConflictException("PINFL is already registered");
+        }
       }
 
-      // Validate country exists
-      const country = await this.countriesDao.findOne(
-        { id: dto.country_id },
-        trx,
-      );
-      if (!country) {
-        throw new BadRequestException(`Country not found: ${dto.country_id}`);
+      // Validate country if provided
+      if (dto.country_id) {
+        const country = await this.countriesDao.findOne(
+          { id: dto.country_id },
+          trx,
+        );
+        if (!country) {
+          throw new BadRequestException(`Country not found: ${dto.country_id}`);
+        }
       }
 
       // Validate region if provided
@@ -469,8 +471,8 @@ export class AuthService {
           last_name: dto.last_name,
           middle_name: dto.middle_name ?? null,
           phone,
-          pinfl: dto.pinfl,
-          country_id: dto.country_id,
+          pinfl: dto.pinfl || null,
+          country_id: dto.country_id || null,
           region_id: dto.region_id ?? null,
           district_id: dto.district_id ?? null,
           is_blocked: false,

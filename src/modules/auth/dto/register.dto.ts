@@ -22,13 +22,12 @@ export class RegisterDto {
   @IsPhoneNumber()
   phone?: string;
 
-  @ValidateIf((dto) => dto.type === 'MANUAL')
+  @IsOptional()
   @Matches(/^\d{14}$/, { message: 'pinfl must be exactly 14 digits' })
   pinfl?: string;
 
-  @ValidateIf((dto) => dto.type === 'MANUAL')
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   country_id?: string;
 
   @IsOptional()
