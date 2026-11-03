@@ -14,9 +14,9 @@ import { createHash, createHmac, createPublicKey, randomBytes, randomUUID, verif
  *       ──deep link──▶ <app scheme>://auth/telegram?ticket=…
  *   app ── POST /auth/telegram/exchange { ticket, app_verifier } ──▶ tokens
  *
- * Everything is stateless: `state` and `ticket` are short-lived JWTs signed with
- * our secret. The Telegram PKCE verifier is derived server-side (HMAC of the
- * state nonce) so it never travels through the browser. The app binds the
+ * `state` is a short random id kept in memory (Telegram caps its length);
+ * `ticket` is a short-lived signed JWT. The Telegram PKCE verifier is derived
+ * server-side (HMAC of the state id) so it never travels through the browser. The app binds the
  * ticket with its own PKCE-style pair (app_challenge / app_verifier), so a
  * ticket intercepted from the deep link is useless to another app.
  */
@@ -26,7 +26,7 @@ const AUTH_URL = `${ISSUER}/auth`;
 const TOKEN_URL = `${ISSUER}/token`;
 const JWKS_URL = `${ISSUER}/.well-known/jwks.json`;
 
-const STATE_TTL = '10m';
+const STATE_TTL_MS = 10 * 60 * 1000;
 const TICKET_TTL = '3m';
 
 export interface TelegramIdentity {
@@ -45,6 +45,8 @@ export class TelegramLoginService {
   private jwksCache: { keys: any[]; at: number } | null = null;
   /** One-time ticket guard (ticket jti → expiry ms). */
   private readonly usedTickets = new Map<string, number>();
+  /** Pending authorizations (state id → app_challenge, expiry ms). */
+  private readonly pendingStates = new Map<string, { ac: string; exp: number }>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -81,12 +83,13 @@ export class TelegramLoginService {
     const clientId = this.cfg('TELEGRAM_LOGIN_CLIENT_ID');
     const redirectUri = this.cfg('TELEGRAM_LOGIN_REDIRECT_URI');
 
-    const nonce = b64url(randomBytes(16));
-    const state = this.jwtService.sign(
-      { typ: 'tg_state', n: nonce, ac: appChallenge },
-      { secret: this.secret, expiresIn: STATE_TTL },
-    );
-    const codeChallenge = b64url(createHash('sha256').update(this.pkceVerifier(nonce)).digest());
+    // Telegram rejects long `state` values ("state too long"), so the state is a
+    // short random id and its data stays in memory until the callback.
+    const now = Date.now();
+    for (const [k, v] of this.pendingStates) if (v.exp < now) this.pendingStates.delete(k);
+    const state = b64url(randomBytes(16)); // 22 chars
+    this.pendingStates.set(state, { ac: appChallenge, exp: now + STATE_TTL_MS });
+    const codeChallenge = b64url(createHash('sha256').update(this.pkceVerifier(state)).digest());
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -102,13 +105,12 @@ export class TelegramLoginService {
 
   // ── 2. Callback: exchange code → verified identity → app ticket ────────
   async handleCallback(code: string, state: string): Promise<string> {
-    let st: any;
-    try {
-      st = this.jwtService.verify(state, { secret: this.secret });
-    } catch {
+    const pending = this.pendingStates.get(state);
+    this.pendingStates.delete(state); // one-time
+    if (!pending || pending.exp < Date.now()) {
       throw new UnauthorizedException('Login session expired, please try again');
     }
-    if (st?.typ !== 'tg_state') throw new UnauthorizedException('Invalid state');
+    const st = { n: state, ac: pending.ac };
 
     const clientId = this.cfg('TELEGRAM_LOGIN_CLIENT_ID');
     const clientSecret = this.cfg('TELEGRAM_LOGIN_CLIENT_SECRET');
