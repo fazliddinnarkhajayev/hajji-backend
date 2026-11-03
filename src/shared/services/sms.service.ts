@@ -92,7 +92,16 @@ export class SmsService {
       }),
     });
     const body = await res.text();
-    return body.includes('Request is received');
+    // Provider response wording varies; a 2xx means the broker accepted the
+    // message (the SMS is delivered even when the body text differs).
+    if (!res.ok) {
+      this.logger.warn(`smsxabar error ${res.status}: ${body}`);
+      return false;
+    }
+    if (!/request is received/i.test(body)) {
+      this.logger.log(`smsxabar accepted (${res.status}) with body: ${body}`);
+    }
+    return true;
   }
 
   // Tajikistan (992) — osonsms.com
