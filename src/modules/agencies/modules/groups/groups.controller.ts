@@ -14,6 +14,7 @@ import { CreateRoomsDto } from './dto/create-rooms.dto';
 import { AddRoomMemberDto } from './dto/add-room-member.dto';
 import { BulkUpdateMemberDocumentsDto, UpdateMemberDocumentsDto } from './dto/update-member-documents.dto';
 import { GroupStatus } from 'src/shared/dao/group-status';
+import { AssignGuideDto } from './dto/assign-guide.dto';
 
 /** Only agency admins (not field managers) may change groups, rooms and plans. */
 const MANAGE_ROLES = [AgencyUserRoleEnum.SUPERADMIN, AgencyUserRoleEnum.SUPERVISOR];
@@ -52,6 +53,24 @@ export class GroupsController {
   @Post(':groupId/voice-key/rotate')
   async rotateVoiceKey(@Param('groupId') groupId: string, @CurrentUser() user: any) {
     return this.groupsService.rotateVoiceKey(groupId, user.agency_id);
+  }
+
+  /** Assign (or replace) the group's guide. A guide may lead several groups. */
+  @AgencyRoles(...MANAGE_ROLES)
+  @Put(':groupId/guide')
+  async assignGuide(
+    @Param('groupId') groupId: string,
+    @Body() dto: AssignGuideDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.groupsService.assignGuide(groupId, user.agency_id, dto.guide_pilgrim_id);
+  }
+
+  /** Leave the group without a guide. */
+  @AgencyRoles(...MANAGE_ROLES)
+  @Delete(':groupId/guide')
+  async unassignGuide(@Param('groupId') groupId: string, @CurrentUser() user: any) {
+    return this.groupsService.unassignGuide(groupId, user.agency_id);
   }
 
   @Get(':groupId/members')

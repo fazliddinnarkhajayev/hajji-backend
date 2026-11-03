@@ -138,7 +138,22 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
       .leftJoin(TABLE_NAMES.GROUP_MEMBERS, `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`, `${TABLE_NAMES.PILGRIMS}.id`)
-      .leftJoin(`${TABLE_NAMES.GROUPS} as grp`, 'grp.id', `${TABLE_NAMES.GROUP_MEMBERS}.group_id`)
+      // A guide may lead a group without being one of its members: fall back to
+      // the group they guide (live first, then newest).
+      .joinRaw(
+        `LEFT JOIN LATERAL (
+           SELECT g.id FROM ${TABLE_NAMES.GROUPS} g
+           WHERE g.guide_pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id
+             AND g.is_deleted = false AND g.deleted_at IS NULL
+           ORDER BY (g.status = 'CANCELLED'), g.created_at DESC
+           LIMIT 1
+         ) guided ON true`,
+      )
+      .leftJoin(
+        `${TABLE_NAMES.GROUPS} as grp`,
+        'grp.id',
+        this.db.raw(`COALESCE(${TABLE_NAMES.GROUP_MEMBERS}.group_id, guided.id)`),
+      )
       .leftJoin(`${TABLE_NAMES.PILGRIMS} as guide`, 'guide.id', 'grp.guide_pilgrim_id')
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
@@ -146,7 +161,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.REGIONS}.id, 'name', ${TABLE_NAMES.REGIONS}.name, 'soato', ${TABLE_NAMES.REGIONS}.soato) as region`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
-        `${TABLE_NAMES.GROUP_MEMBERS}.group_id`,
+        this.db.raw(`COALESCE(${TABLE_NAMES.GROUP_MEMBERS}.group_id, guided.id) as group_id`),
         this.db.raw(`CASE WHEN grp.id IS NULL THEN NULL ELSE json_build_object('id', grp.id, 'name', grp.name, 'departure_date', grp.departure_date, 'return_date', grp.return_date, 'meeting_point', grp.meeting_point, 'status', grp.status, 'guide_name', NULLIF(TRIM(CONCAT_WS(' ', guide.first_name, guide.middle_name, guide.last_name)), ''), 'guide_phone', guide.phone) END as "group"`),
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.user_id`]: userId, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })
@@ -162,7 +177,22 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
       .leftJoin(TABLE_NAMES.DISTRICTS, `${TABLE_NAMES.PILGRIMS}.district_id`, `${TABLE_NAMES.DISTRICTS}.id`)
       .leftJoin(TABLE_NAMES.AGENCIES, `${TABLE_NAMES.PILGRIMS}.agency_id`, `${TABLE_NAMES.AGENCIES}.id`)
       .leftJoin(TABLE_NAMES.GROUP_MEMBERS, `${TABLE_NAMES.GROUP_MEMBERS}.pilgrim_id`, `${TABLE_NAMES.PILGRIMS}.id`)
-      .leftJoin(`${TABLE_NAMES.GROUPS} as grp`, 'grp.id', `${TABLE_NAMES.GROUP_MEMBERS}.group_id`)
+      // A guide may lead a group without being one of its members: fall back to
+      // the group they guide (live first, then newest).
+      .joinRaw(
+        `LEFT JOIN LATERAL (
+           SELECT g.id FROM ${TABLE_NAMES.GROUPS} g
+           WHERE g.guide_pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id
+             AND g.is_deleted = false AND g.deleted_at IS NULL
+           ORDER BY (g.status = 'CANCELLED'), g.created_at DESC
+           LIMIT 1
+         ) guided ON true`,
+      )
+      .leftJoin(
+        `${TABLE_NAMES.GROUPS} as grp`,
+        'grp.id',
+        this.db.raw(`COALESCE(${TABLE_NAMES.GROUP_MEMBERS}.group_id, guided.id)`),
+      )
       .leftJoin(`${TABLE_NAMES.PILGRIMS} as guide`, 'guide.id', 'grp.guide_pilgrim_id')
       .select(
         `${TABLE_NAMES.PILGRIMS}.*`,
@@ -170,7 +200,7 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.REGIONS}.id, 'name', ${TABLE_NAMES.REGIONS}.name, 'soato', ${TABLE_NAMES.REGIONS}.soato) as region`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.DISTRICTS}.id, 'name', ${TABLE_NAMES.DISTRICTS}.name, 'soato', ${TABLE_NAMES.DISTRICTS}.soato) as district`),
         this.db.raw(`json_build_object('id', ${TABLE_NAMES.AGENCIES}.id, 'name', ${TABLE_NAMES.AGENCIES}.name) as agency`),
-        `${TABLE_NAMES.GROUP_MEMBERS}.group_id`,
+        this.db.raw(`COALESCE(${TABLE_NAMES.GROUP_MEMBERS}.group_id, guided.id) as group_id`),
         this.db.raw(`CASE WHEN grp.id IS NULL THEN NULL ELSE json_build_object('id', grp.id, 'name', grp.name, 'departure_date', grp.departure_date, 'return_date', grp.return_date, 'meeting_point', grp.meeting_point, 'status', grp.status, 'guide_name', NULLIF(TRIM(CONCAT_WS(' ', guide.first_name, guide.middle_name, guide.last_name)), ''), 'guide_phone', guide.phone) END as "group"`),
       )
       .where({ [`${TABLE_NAMES.PILGRIMS}.id`]: id, [`${TABLE_NAMES.PILGRIMS}.is_deleted`]: false })

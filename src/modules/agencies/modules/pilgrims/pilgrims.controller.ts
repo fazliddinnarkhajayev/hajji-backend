@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Body, Param, Query, Patch, Delete, UseGuards, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
+import { MAX_FILE_BYTES } from './pilgrims-import';
 import { mkdirSync } from 'fs';
 import { extname } from 'path';
 import { randomUUID } from 'crypto';
@@ -50,6 +51,33 @@ export class AgencyPilgrimsController {
   @Get('search')
   async searchPilgrims(@Query() query: any) {
     return this.pilgrimsService.searchPilgrimsByPhoneOrPinfl(query);
+  }
+
+  /** Excel template for bulk registration (with the country / region / district lists). */
+  @Get('import/template')
+  async importTemplate(@Res() res: Response) {
+    const buffer = await this.pilgrimsService.buildImportTemplate();
+    const filename = 'ziyoratchilar-shablon.xlsx';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(buffer);
+  }
+
+  /**
+   * Bulk registration (field "file", .xlsx up to 5 MB). All or nothing: when any row is wrong
+   * nothing is created and `errors` lists every problem by row and field.
+   */
+  @Post('import')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      fileFilter: (_req, file, cb) => cb(null, extname(file.originalname).toLowerCase() === '.xlsx'),
+      limits: { fileSize: MAX_FILE_BYTES },
+    }),
+  )
+  async importExcel(@UploadedFile() file: any, @CurrentUser() user: any) {
+    return this.pilgrimsService.importFromExcel(file, user);
   }
 
   @Get(':userId')

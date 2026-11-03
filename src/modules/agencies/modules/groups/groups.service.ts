@@ -131,6 +131,28 @@ export class GroupsService {
     return this.groupsDao.findByIdWithJoins(id);
   }
 
+  /**
+   * Set (or replace) the group's guide. The guide must be one of this agency's
+   * pilgrims marked as guide; leading other groups is allowed.
+   */
+  async assignGuide(id: string, agencyId: string, guidePilgrimId: string): Promise<Group | undefined> {
+    await this.findOne(id, agencyId);
+    const guide = await this.pilgrimsDao.findById(guidePilgrimId);
+    if (!guide || guide.is_deleted || (guide as any).agency_id !== agencyId) {
+      throw new NotFoundException('Guide not found for this agency');
+    }
+    if (!guide.is_guide) throw new BadRequestException('Pilgrim is not a guide');
+    await this.groupsDao.updateById(id, { guide_pilgrim_id: guidePilgrimId, updated_at: new Date() } as Partial<Group>);
+    return this.groupsDao.findByIdWithJoins(id);
+  }
+
+  /** Leave the group without a guide (needs migration 075: guide_pilgrim_id nullable). */
+  async unassignGuide(id: string, agencyId: string): Promise<Group | undefined> {
+    await this.findOne(id, agencyId);
+    await this.groupsDao.updateById(id, { guide_pilgrim_id: null, updated_at: new Date() } as unknown as Partial<Group>);
+    return this.groupsDao.findByIdWithJoins(id);
+  }
+
   async remove(id: string, agencyId: string): Promise<{ success: boolean }> {
     await this.findOne(id, agencyId);
     await this.db.transaction(async (trx) => {

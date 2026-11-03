@@ -13,6 +13,7 @@ import { CreatePilgrimDto } from './dto/create-pilgrim.dto';
 import { UpdatePilgrimDto } from './dto/update-pilgrim.dto';
 import { TABLE_NAMES } from 'src/shared/constants';
 import { PilgrimAgencyHistoryDao } from 'src/shared/dao/pilgrim-agency-history.dao';
+import { buildTemplate, ImportError, ImportRefs, normalizeImportPhone, parseWorkbook, validateRows } from './pilgrims-import';
 
 /** Passport scans live outside the public /uploads folder. */
 export const PRIVATE_DIR = join(process.cwd(), 'private');
@@ -81,6 +82,79 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
       if (err?.code === '23505') throw new BadRequestException('PINFL or phone is already used by another pilgrim');
       throw err;
     }
+  }
+
+  /** Countries, regions and districts by name, for the import template and for matching names. */
+  private importRefs(t: Knex.Transaction): Promise<ImportRefs> {
+    return Promise.all([
+      t(TABLE_NAMES.COUNTRIES).where({ is_deleted: false }).select('id', 'name'),
+      t(TABLE_NAMES.REGIONS).where({ is_deleted: false }).select('id', 'name', 'country_id as parent_id'),
+      t(TABLE_NAMES.DISTRICTS).where({ is_deleted: false }).select('id', 'name', 'region_id as parent_id'),
+    ]).then(([countries, regions, districts]) => ({ countries, regions, districts }));
+  }
+
+  async buildImportTemplate(): Promise<Buffer> {
+    return buildTemplate(await this.transaction((t) => this.importRefs(t)));
+  }
+
+  /**
+   * Bulk registration from an Excel file. Every row is checked first; if anything is wrong nothing
+   * is created and all problems come back (row + field + code). Otherwise all rows are created in
+   * one transaction.
+   */
+  async importFromExcel(
+    file: { buffer: Buffer } | undefined,
+    user: any,
+  ): Promise<{ created_count: number; total_rows: number; errors: ImportError[] }> {
+    if (!file?.buffer) return { created_count: 0, total_rows: 0, errors: [{ row: null, field: null, code: 'invalid_file' }] };
+
+    const parsed = await parseWorkbook(file.buffer);
+    if (parsed.errors.length) return { created_count: 0, total_rows: parsed.rows.length, errors: parsed.errors };
+    const rows = parsed.rows;
+
+    const phones = [...new Set(rows.map((r) => normalizeImportPhone(r.phone)).filter(Boolean))];
+    const pinfls = [...new Set(rows.map((r) => r.pinfl.replace(/\s/g, '')).filter((p) => /^\d{14}$/.test(p)))];
+    const [refs, takenPhones, takenPinfls] = await this.transaction((t) => Promise.all([
+      this.importRefs(t),
+      phones.length ? t(TABLE_NAMES.USERS).whereIn('username', phones).pluck('username') : Promise.resolve([]),
+      pinfls.length ? t(TABLE_NAMES.PILGRIMS).whereIn('pinfl', pinfls).pluck('pinfl') : Promise.resolve([]),
+    ]));
+
+    const { items, errors } = validateRows(rows, refs, {
+      phones: new Set(takenPhones as string[]),
+      pinfls: new Set(takenPinfls as string[]),
+    });
+    if (errors.length) return { created_count: 0, total_rows: rows.length, errors };
+
+    try {
+      await this.transaction(async (t) => {
+        for (const it of items) {
+          const newUser = await this.usersService.create(
+            { username: it.phone, type: UserTypesEnum.PILGRIM, created_by_id: user.id } as any,
+            t,
+          );
+          await this.pilgrimsDao.insert(
+            {
+              first_name: it.first_name,
+              last_name: it.last_name,
+              phone: it.phone,
+              pinfl: it.pinfl,
+              country_id: it.country_id,
+              region_id: it.region_id,
+              district_id: it.district_id,
+              user_id: newUser.id,
+              agency_id: user.agency_id,
+            } as Partial<Pilgrim>,
+            t,
+          );
+        }
+      });
+    } catch (err: any) {
+      // Someone registered the same phone / PINFL between the check and the insert.
+      if (err?.code === '23505') throw new BadRequestException('PINFL or phone is already used by another pilgrim. Please upload the file again.');
+      throw err;
+    }
+    return { created_count: items.length, total_rows: rows.length, errors: [] };
   }
 
   /** The pilgrim, if it belongs to this agency (404 otherwise, so ids of other agencies don't leak). */
