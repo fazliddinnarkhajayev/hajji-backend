@@ -35,6 +35,7 @@ import { DistrictsDao } from "../references/modules/districts/districts.dao";
 import { SundryService } from "../../shared/services/sundry.service";
 import { SmsService } from "../../shared/services/sms.service";
 import { randomUUID } from "crypto";
+import { TelegramIdentity } from "./telegram-login.service";
 
 export interface JwtPayload {
   user_id: string;
@@ -330,27 +331,89 @@ export class AuthService {
         );
       }
 
-      // Is there a usable registered pilgrim account for this phone?
-      const user = await this.usersAuthDao.findUserBy({ username: phone }, trx);
-      const isRegistered =
-        !!user &&
-        user.type === UserTypesEnum.PILGRIM &&
-        !user.is_blocked &&
-        !user.deleted_at &&
-        !!(await this.pilgrimsDao.findByUserId(user.id, trx));
+      return this.completePhoneLogin(phone, sessionId, trx);
+    });
+  }
 
-      if (isRegistered) {
-        // Existing user → log in. Consume the OTP session.
-        if (sessionId) await this.otpSessionsDao.markUsed(sessionId, trx);
-        await this.usersAuthDao.updateLoginAt(user!.id, trx);
-        const tokens = await this.generateTokens(user!.id, "PILGRIM", undefined, trx);
-        return { success: true, is_registered: true, ...tokens };
+  /**
+   * Shared tail of every phone-proof login (SMS OTP, Telegram login): log an
+   * existing pilgrim in, or mark the session VERIFIED so registration may follow.
+   */
+  private async completePhoneLogin(
+    phone: string,
+    sessionId: string | null,
+    trx: Knex.Transaction,
+  ): Promise<{ success: boolean; is_registered: boolean; access_token?: string; refresh_token?: string }> {
+    // Is there a usable registered pilgrim account for this phone?
+    const user = await this.usersAuthDao.findUserBy({ username: phone }, trx);
+    const isRegistered =
+      !!user &&
+      user.type === UserTypesEnum.PILGRIM &&
+      !user.is_blocked &&
+      !user.deleted_at &&
+      !!(await this.pilgrimsDao.findByUserId(user.id, trx));
+
+    if (isRegistered) {
+      // Existing user → log in. Consume the OTP session.
+      if (sessionId) await this.otpSessionsDao.markUsed(sessionId, trx);
+      await this.usersAuthDao.updateLoginAt(user!.id, trx);
+      const tokens = await this.generateTokens(user!.id, "PILGRIM", undefined, trx);
+      return { success: true, is_registered: true, ...tokens };
+    }
+
+    // New user → mark the session VERIFIED so the follow-up registration is
+    // authorized (see registerPilgrimManual's proof-of-OTP check).
+    if (sessionId) await this.otpSessionsDao.markVerified(sessionId, trx);
+    return { success: true, is_registered: false };
+  }
+
+  // ===================== Log In With Telegram =====================
+
+  /**
+   * Called after TelegramLoginService has verified the Telegram id_token. The
+   * phone number is Telegram-verified, so it counts as proof-of-phone exactly
+   * like a passed OTP.
+   */
+  async loginWithTelegram(identity: TelegramIdentity): Promise<{
+    success: boolean;
+    is_registered: boolean;
+    access_token?: string;
+    refresh_token?: string;
+    phone: string;
+    first_name?: string;
+    last_name?: string;
+  }> {
+    const phone = this.sundryService.normalizePhone(identity.phone);
+
+    const existing = await this.usersAuthDao.findUserBy({ username: phone });
+    if (existing) {
+      if (existing.type !== UserTypesEnum.PILGRIM) {
+        throw new ForbiddenException("Account is not a pilgrim account");
       }
+      if (existing.is_blocked) throw new ForbiddenException("User account is blocked");
+      if (existing.deleted_at) throw new ForbiddenException("User account has been deleted");
+    }
 
-      // New user → mark the session VERIFIED so the follow-up registration is
-      // authorized (see registerPilgrimManual's proof-of-OTP check).
-      if (sessionId) await this.otpSessionsDao.markVerified(sessionId, trx);
-      return { success: true, is_registered: false };
+    return this.db.transaction(async (trx) => {
+      // Record the Telegram proof as an OTP session so the existing
+      // registration proof-of-phone check works unchanged.
+      const expiryMinutes = Number(this.configService.get<string>("OTP_EXPIRY_MINUTES") ?? "10");
+      const session = await this.otpSessionsDao.createOtpSession(
+        phone,
+        // code column is varchar(10); non-numeric so it can never match an
+        // OTP typed into verify-otp.
+        `TG${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+        "TELEGRAM",
+        new Date(Date.now() + expiryMinutes * 60 * 1000),
+        trx,
+      );
+      const result = await this.completePhoneLogin(phone, session.id, trx);
+      return {
+        ...result,
+        phone: `+${phone}`,
+        first_name: identity.first_name,
+        last_name: identity.last_name,
+      };
     });
   }
 

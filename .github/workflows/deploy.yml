@@ -78,6 +78,11 @@ jobs:
           echo "SENDPULSE_SENDER=${{ secrets.PROD_SENDPULSE_SENDER }}"                             >> .env
           echo "TELEGRAM_GATEWAY_TOKEN=${{ secrets.PROD_TELEGRAM_GATEWAY_TOKEN }}"                 >> .env
           echo "DEFAULT_COUNTRY_ID=${{ secrets.PROD_DEFAULT_COUNTRY_ID }}"                         >> .env
+          # Log In With Telegram (OIDC) — @BotFather → bot → Bot Settings → Login Widget.
+          echo "TELEGRAM_LOGIN_CLIENT_ID=${{ secrets.PROD_TELEGRAM_LOGIN_CLIENT_ID }}"             >> .env
+          echo "TELEGRAM_LOGIN_CLIENT_SECRET=${{ secrets.PROD_TELEGRAM_LOGIN_CLIENT_SECRET }}"     >> .env
+          echo "TELEGRAM_LOGIN_REDIRECT_URI=${{ secrets.PROD_TELEGRAM_LOGIN_REDIRECT_URI || 'https://hajji.uz/api/auth/telegram/callback' }}" >> .env
+          echo "TELEGRAM_LOGIN_APP_REDIRECT=${{ secrets.PROD_TELEGRAM_LOGIN_APP_REDIRECT || 'uz.hajji.guide://auth/telegram' }}"         >> .env
 
       - name: Write SSH private key
         run: |

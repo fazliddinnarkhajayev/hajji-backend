@@ -15,11 +15,12 @@ import { RegionsDao } from '../references/modules/regions/regions.dao';
 import { DistrictsDao } from '../references/modules/districts/districts.dao';
 import { SundryService } from '../../shared/services/sundry.service';
 import { SmsService } from '../../shared/services/sms.service';
+import { TelegramLoginService } from './telegram-login.service';
 
 @Module({
   imports: [CoreModule, JwtModule.register({}), UsersModule],
   controllers: [AuthController],
-  providers: [AuthService, SundryService, SmsService, UsersAuthDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao, CountriesDao, RegionsDao, DistrictsDao],
+  providers: [AuthService, TelegramLoginService, SundryService, SmsService, UsersAuthDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao, CountriesDao, RegionsDao, DistrictsDao],
   exports: [AuthService],
 })
 export class AuthModule { }
