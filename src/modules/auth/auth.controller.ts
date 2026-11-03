@@ -65,11 +65,17 @@ export class AuthController {
   /** Opened by the app in the system browser; redirects to Telegram. */
   @IsPublic()
   @Get('telegram/start')
-  telegramStart(@Query('app_challenge') appChallenge: string, @Res() res: Response) {
+  telegramStart(
+    @Query('app_challenge') appChallenge: string,
+    @Query('return_to') returnTo: string,
+    @Res() res: Response,
+  ) {
+    // Browser build passes its origin; only whitelisted origins are honoured.
+    const webOrigin = this.telegramLogin.allowedWebOrigin(returnTo);
     try {
-      res.redirect(302, this.telegramLogin.buildAuthUrl(appChallenge));
+      res.redirect(302, this.telegramLogin.buildAuthUrl(appChallenge, webOrigin));
     } catch (err: any) {
-      this.sendAppRedirect(res, { error: err?.message || 'start_failed' });
+      this.sendAppRedirect(res, { error: err?.message || 'start_failed' }, webOrigin);
     }
   }
 
@@ -82,14 +88,15 @@ export class AuthController {
     @Query('error') error: string,
     @Res() res: Response,
   ) {
+    const webOrigin = this.telegramLogin.returnToFor(state);
     if (error || !code || !state) {
-      return this.sendAppRedirect(res, { error: error || 'cancelled' });
+      return this.sendAppRedirect(res, { error: error || 'cancelled' }, webOrigin);
     }
     try {
       const ticket = await this.telegramLogin.handleCallback(code, state);
-      return this.sendAppRedirect(res, { ticket });
+      return this.sendAppRedirect(res, { ticket }, webOrigin);
     } catch (err: any) {
-      return this.sendAppRedirect(res, { error: err?.message || 'login_failed' });
+      return this.sendAppRedirect(res, { error: err?.message || 'login_failed' }, webOrigin);
     }
   }
 
@@ -106,7 +113,14 @@ export class AuthController {
    * page (auto-redirect + button) because some browsers block a bare 302 to a
    * custom scheme without a user gesture.
    */
-  private sendAppRedirect(res: Response, params: Record<string, string>) {
+  private sendAppRedirect(res: Response, params: Record<string, string>, webOrigin?: string) {
+    // Browser build: plain redirect back to the web app with tg_* params.
+    if (webOrigin) {
+      const q = new URLSearchParams(
+        Object.fromEntries(Object.entries(params).map(([k, v]) => [`tg_${k}`, v])),
+      );
+      return res.redirect(302, `${webOrigin}/?${q.toString()}`);
+    }
     const url = `${this.telegramLogin.appRedirect}?${new URLSearchParams(params).toString()}`;
     const safe = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     res

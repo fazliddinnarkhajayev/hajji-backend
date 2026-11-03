@@ -46,7 +46,7 @@ export class TelegramLoginService {
   /** One-time ticket guard (ticket jti → expiry ms). */
   private readonly usedTickets = new Map<string, number>();
   /** Pending authorizations (state id → app_challenge, expiry ms). */
-  private readonly pendingStates = new Map<string, { ac: string; exp: number }>();
+  private readonly pendingStates = new Map<string, { ac: string; exp: number; returnTo?: string }>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -71,12 +71,37 @@ export class TelegramLoginService {
     return this.configService.get<string>('TELEGRAM_LOGIN_APP_REDIRECT') || 'uz.hajji.guide://auth/telegram';
   }
 
+  /**
+   * Web (browser) build: origins the callback may send the ticket back to.
+   * Comma-separated in TELEGRAM_LOGIN_WEB_ORIGINS; anything else is ignored
+   * (no open redirect).
+   */
+  allowedWebOrigin(returnTo?: string): string | undefined {
+    if (!returnTo) return undefined;
+    let origin: string;
+    try {
+      origin = new URL(returnTo).origin;
+    } catch {
+      return undefined;
+    }
+    const allowed = (this.configService.get<string>('TELEGRAM_LOGIN_WEB_ORIGINS') || 'http://localhost:5173')
+      .split(',')
+      .map((o) => o.trim().replace(/\/+$/, ''))
+      .filter(Boolean);
+    return allowed.includes(origin) ? origin : undefined;
+  }
+
+  /** Web origin recorded for a pending state (without consuming it). */
+  returnToFor(state?: string): string | undefined {
+    return state ? this.pendingStates.get(state)?.returnTo : undefined;
+  }
+
   private pkceVerifier(nonce: string): string {
     return b64url(createHmac('sha256', this.secret).update(`tg-pkce:${nonce}`).digest());
   }
 
   // ── 1. Start: build the Telegram authorization URL ─────────────────────
-  buildAuthUrl(appChallenge: string): string {
+  buildAuthUrl(appChallenge: string, returnTo?: string): string {
     if (!/^[A-Za-z0-9_-]{43}$/.test(appChallenge ?? '')) {
       throw new BadRequestException('Invalid app_challenge');
     }
@@ -88,7 +113,7 @@ export class TelegramLoginService {
     const now = Date.now();
     for (const [k, v] of this.pendingStates) if (v.exp < now) this.pendingStates.delete(k);
     const state = b64url(randomBytes(16)); // 22 chars
-    this.pendingStates.set(state, { ac: appChallenge, exp: now + STATE_TTL_MS });
+    this.pendingStates.set(state, { ac: appChallenge, exp: now + STATE_TTL_MS, returnTo });
     const codeChallenge = b64url(createHash('sha256').update(this.pkceVerifier(state)).digest());
 
     const params = new URLSearchParams({

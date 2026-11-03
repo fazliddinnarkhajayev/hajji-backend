@@ -82,6 +82,7 @@ jobs:
           echo "TELEGRAM_LOGIN_CLIENT_ID=${{ secrets.PROD_TELEGRAM_LOGIN_CLIENT_ID }}"             >> .env
           echo "TELEGRAM_LOGIN_CLIENT_SECRET=${{ secrets.PROD_TELEGRAM_LOGIN_CLIENT_SECRET }}"     >> .env
           echo "TELEGRAM_LOGIN_REDIRECT_URI=${{ secrets.PROD_TELEGRAM_LOGIN_REDIRECT_URI || 'https://hajji.uz/api/auth/telegram/callback' }}" >> .env
+          echo "TELEGRAM_LOGIN_WEB_ORIGINS=${{ secrets.PROD_TELEGRAM_LOGIN_WEB_ORIGINS || 'http://localhost:5173' }}"               >> .env
           echo "TELEGRAM_LOGIN_APP_REDIRECT=${{ secrets.PROD_TELEGRAM_LOGIN_APP_REDIRECT || 'uz.hajji.guide://auth/telegram' }}"         >> .env
 
       - name: Write SSH private key
