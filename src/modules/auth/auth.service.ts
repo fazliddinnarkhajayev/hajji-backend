@@ -21,6 +21,7 @@ import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { LogoutDto } from "./dto/logout.dto";
 import { AgencyResetPasswordDto } from "./dto/agency-reset-password.dto";
 import { UsersAuthDao, UserRecord } from "../../shared/dao/users-auth.dao";
+import { UserActivityDao, UserActivityMethod } from "../../shared/dao/user-activity.dao";
 import { AdminsDao } from "../../shared/dao/admins.dao";
 import { OtpSessionsDao } from "../../shared/dao/otp-sessions.dao";
 import { RefreshTokensDao } from "../../shared/dao/refresh-tokens.dao";
@@ -58,6 +59,7 @@ export class AuthService {
   constructor(
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
     private readonly usersAuthDao: UsersAuthDao,
+    private readonly userActivityDao: UserActivityDao,
     private readonly adminsDao: AdminsDao,
     private readonly agencyUsersDao: AgencyUsersDao,
     private readonly usersService: UsersService,
@@ -111,6 +113,7 @@ export class AuthService {
 
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
+      await this.userActivityDao.record(user.id, "LOGIN", "PASSWORD", trx);
 
       // Generate tokens
       const tokens = await this.generateTokens(
@@ -297,6 +300,7 @@ export class AuthService {
       // TEST BYPASS: Allow test code "123456" to skip OTP verification
       const isTestCode = dto.code === "123456";
       let sessionId: string | null = null;
+      let method: UserActivityMethod | null = null;
 
       if (!isTestCode) {
         // Find latest OTP session
@@ -325,13 +329,14 @@ export class AuthService {
         }
 
         sessionId = otpSession.id;
+        method = otpSession.method;
       } else {
         this.logger.warn(
           `TEST MODE: OTP verification bypassed for phone ${phone} with test code`,
         );
       }
 
-      return this.completePhoneLogin(phone, sessionId, trx);
+      return this.completePhoneLogin(phone, sessionId, method, trx);
     });
   }
 
@@ -342,6 +347,7 @@ export class AuthService {
   private async completePhoneLogin(
     phone: string,
     sessionId: string | null,
+    method: UserActivityMethod | null,
     trx: Knex.Transaction,
   ): Promise<{ success: boolean; is_registered: boolean; access_token?: string; refresh_token?: string }> {
     // Is there a usable registered pilgrim account for this phone?
@@ -357,6 +363,7 @@ export class AuthService {
       // Existing user → log in. Consume the OTP session.
       if (sessionId) await this.otpSessionsDao.markUsed(sessionId, trx);
       await this.usersAuthDao.updateLoginAt(user!.id, trx);
+      await this.userActivityDao.record(user!.id, "LOGIN", method, trx);
       const tokens = await this.generateTokens(user!.id, "PILGRIM", undefined, trx);
       return { success: true, is_registered: true, ...tokens };
     }
@@ -407,7 +414,7 @@ export class AuthService {
         new Date(Date.now() + expiryMinutes * 60 * 1000),
         trx,
       );
-      const result = await this.completePhoneLogin(phone, session.id, trx);
+      const result = await this.completePhoneLogin(phone, session.id, "TELEGRAM", trx);
       return {
         ...result,
         phone: `+${phone}`,
@@ -552,6 +559,7 @@ export class AuthService {
 
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
+      await this.userActivityDao.record(user.id, "REGISTER", verifiedSession?.method ?? null, trx);
 
       // Generate tokens
       const tokens = await this.generateTokens(
@@ -606,6 +614,7 @@ export class AuthService {
 
       // Update last login
       await this.usersAuthDao.updateLoginAt(user.id, trx);
+      await this.userActivityDao.record(user.id, "REGISTER", "GOOGLE", trx);
 
       // Get pilgrim data
       // const pilgrim = await this.pilgrimsDao.findPilgrimByUserId(user.id, trx);

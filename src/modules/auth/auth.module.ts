@@ -4,6 +4,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { CoreModule } from '../../core/core.module';
 import { UsersAuthDao } from '../../shared/dao/users-auth.dao';
+import { UserActivityDao } from '../../shared/dao/user-activity.dao';
 import { AdminsDao } from '../../shared/dao/admins.dao';
 import { OtpSessionsDao } from '../../shared/dao/otp-sessions.dao';
 import { RefreshTokensDao } from '../../shared/dao/refresh-tokens.dao';
@@ -20,7 +21,7 @@ import { TelegramLoginService } from './telegram-login.service';
 @Module({
   imports: [CoreModule, JwtModule.register({}), UsersModule],
   controllers: [AuthController],
-  providers: [AuthService, TelegramLoginService, SundryService, SmsService, UsersAuthDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao, CountriesDao, RegionsDao, DistrictsDao],
+  providers: [AuthService, TelegramLoginService, SundryService, SmsService, UsersAuthDao, UserActivityDao, AdminsDao, OtpSessionsDao, RefreshTokensDao, PilgrimsDao, AgencyUsersDao, CountriesDao, RegionsDao, DistrictsDao],
   exports: [AuthService],
 })
 export class AuthModule { }
