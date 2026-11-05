@@ -3,9 +3,10 @@ import { AgenciesModule } from './agencies/agencies.module';
 import { PilgrimsModule } from './pilgrims/pilgrims.module';
 import { GroupsModule } from './groups/groups.module';
 import { ActivitiesModule } from './activities/activities.module';
+import { AdminDashboardModule } from './dashboard/dashboard.module';
 
 @Module({
-  imports: [AgenciesModule, PilgrimsModule, GroupsModule, ActivitiesModule],
+  imports: [AgenciesModule, PilgrimsModule, GroupsModule, ActivitiesModule, AdminDashboardModule],
   exports: [],
 })
 export class AdminsModulesModule { }
