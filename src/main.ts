@@ -17,6 +17,8 @@ async function bootstrap() {
   const port = Number(process.env.PORT ?? 3000);
 
   app.enableCors({ origin: '*' })
+  // Tawaf / Sa'y uploads carry the walked GPS path (thousands of fixes).
+  app.useBodyParser('json', { limit: '10mb' });
 
   app.setGlobalPrefix(apiPrefix);
   app.useGlobalPipes(

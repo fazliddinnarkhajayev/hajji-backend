@@ -4,9 +4,10 @@ import { PilgrimsModule } from './pilgrims/pilgrims.module';
 import { GroupsModule } from './groups/groups.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { AdminDashboardModule } from './dashboard/dashboard.module';
+import { AdminRitualSessionsModule } from './ritual-sessions/ritual-sessions.module';
 
 @Module({
-  imports: [AgenciesModule, PilgrimsModule, GroupsModule, ActivitiesModule, AdminDashboardModule],
+  imports: [AgenciesModule, PilgrimsModule, GroupsModule, ActivitiesModule, AdminDashboardModule, AdminRitualSessionsModule],
   exports: [],
 })
 export class AdminsModulesModule { }
