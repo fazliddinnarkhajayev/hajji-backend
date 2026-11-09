@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { TelegramLoginService } from './telegram-login.service';
 import { TelegramExchangeDto } from './dto/telegram-exchange.dto';
+import { TelegramNativeExchangeDto, TelegramNativeStartDto } from './dto/telegram-native.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { LoginDto } from './dto/login.dto';
@@ -105,6 +106,21 @@ export class AuthController {
   @Post('telegram/exchange')
   async telegramExchange(@Body() dto: TelegramExchangeDto) {
     const identity = this.telegramLogin.redeemTicket(dto.ticket, dto.app_verifier);
+    return this.authService.loginWithTelegram(identity);
+  }
+
+  /** Native login, step 1: the tg:// link that opens the consent screen in the Telegram app. */
+  @IsPublic()
+  @Post('telegram/native/start')
+  telegramNativeStart(@Body() dto: TelegramNativeStartDto) {
+    return this.telegramLogin.nativeStart(dto.app_challenge, dto.platform);
+  }
+
+  /** Native login, step 2: code from the App Link + the app's PKCE verifier -> tokens / register handoff. */
+  @IsPublic()
+  @Post('telegram/native/exchange')
+  async telegramNativeExchange(@Body() dto: TelegramNativeExchangeDto) {
+    const identity = await this.telegramLogin.nativeExchange(dto.code, dto.code_verifier, dto.platform);
     return this.authService.loginWithTelegram(identity);
   }
 
