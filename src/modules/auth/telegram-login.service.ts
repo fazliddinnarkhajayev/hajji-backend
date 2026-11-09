@@ -222,6 +222,7 @@ export class TelegramLoginService {
 
   /** Asks Telegram for the tg:// link that opens the consent screen in the Telegram app. */
   async nativeStart(appChallenge: string, platform: NativePlatform): Promise<{ url: string; redirect_uri: string }> {
+    this.logger.debug(`nativeStart(${platform}, ${appChallenge})`);
     if (!/^[A-Za-z0-9_-]{43}$/.test(appChallenge ?? '')) throw new BadRequestException('Invalid app_challenge');
     const redirectUri = this.nativeRedirect(platform);
     const params = new URLSearchParams({
