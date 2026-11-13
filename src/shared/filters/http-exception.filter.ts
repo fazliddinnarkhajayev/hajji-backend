@@ -32,9 +32,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
         this.logger.warn(`${prefix} → ${status}: ${JSON.stringify(message)}`);
       }
 
+      // Extra fields such as `code` (e.g. INSUFFICIENT_COINS) and its details go to the client too.
+      const { message: _m, statusCode: _s, error: _e, ...extra } =
+        typeof exceptionResponse === 'object' && exceptionResponse !== null ? (exceptionResponse as Record<string, unknown>) : {};
+
       response.status(status).json({
         success: false,
         message,
+        ...extra,
       });
       return;
     }

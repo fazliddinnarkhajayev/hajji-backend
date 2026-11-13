@@ -45,4 +45,8 @@ export const TABLE_NAMES = {
   CHAT_ROOMS: 'chat_rooms',
   CHAT_ROOM_MEMBERS: 'chat_room_members',
   CHAT_MESSAGES: 'chat_messages',
+  BILLING_CURRENCIES: 'billing_currencies',
+  WALLET_TRANSACTIONS: 'wallet_transactions',
+  PILGRIM_ACTIVATIONS: 'pilgrim_activations',
+  REFUND_REQUESTS: 'refund_requests',
 } as const;

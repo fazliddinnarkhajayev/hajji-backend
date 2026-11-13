@@ -11,6 +11,7 @@ import { GroupVoiceKeysDao } from "./dao/group-voice-keys.dao";
 import { UsersAuthDao } from "./dao/users-auth.dao";
 import { SundryService } from "./services/sundry.service";
 import { SmsService } from "./services/sms.service";
+import { BillingService } from "./services/billing.service";
 
 @Module({
   imports: [JwtModule.register({})],
@@ -21,6 +22,7 @@ import { SmsService } from "./services/sms.service";
     },
     SundryService,
     SmsService,
+    BillingService,
     PilgrimAgencyHistoryDao,
     InvitationsDao,
     PilgrimsDao,
@@ -29,6 +31,6 @@ import { SmsService } from "./services/sms.service";
     GroupVoiceKeysDao,
     UsersAuthDao,
   ],
-  exports: [JwtModule, SundryService, SmsService, PilgrimAgencyHistoryDao, InvitationsDao, PilgrimsDao, GroupsDao, GroupMembersDao, GroupVoiceKeysDao, UsersAuthDao],
+  exports: [JwtModule, SundryService, SmsService, BillingService, PilgrimAgencyHistoryDao, InvitationsDao, PilgrimsDao, GroupsDao, GroupMembersDao, GroupVoiceKeysDao, UsersAuthDao],
 })
 export class SharedModule {}

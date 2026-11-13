@@ -15,6 +15,7 @@ import { RoomsDao, RoomInput, RoomWithMembers } from 'src/shared/dao/rooms.dao';
 import { KNEX_CONNECTION } from 'src/core/database/database.constants';
 import { TABLE_NAMES } from 'src/shared/constants';
 import { Knex } from 'knex';
+import { BillingService } from 'src/shared/services/billing.service';
 
 @Injectable()
 export class GroupsService {
@@ -27,6 +28,7 @@ export class GroupsService {
     private readonly roomsDao: RoomsDao,
     @Inject(KNEX_CONNECTION) private readonly db: Knex,
     private readonly voiceKeysDao: GroupVoiceKeysDao,
+    private readonly billing: BillingService,
   ) {}
 
   async create(agencyId: string, createGroupDto: CreateGroupDto): Promise<Group> {
@@ -156,6 +158,7 @@ export class GroupsService {
   async remove(id: string, agencyId: string): Promise<{ success: boolean }> {
     await this.findOne(id, agencyId);
     await this.db.transaction(async (trx) => {
+      await this.billing.releaseGroup(trx, id);
       await this.groupMembersDao.releaseGroup(id, trx);
       await this.groupsDao.deleteById(id, trx);
     });
@@ -164,7 +167,11 @@ export class GroupsService {
 
   // ── Group Members ──────────────────────────────────────────
 
-  async addPilgrimToGroup(groupId: string, agencyId: string, pilgrimId: string): Promise<any> {
+  /**
+   * Adds the pilgrim and takes one coin for them in the same transaction (free if they already
+   * hold an unused activation). No coins: 402 INSUFFICIENT_COINS and nothing is written.
+   */
+  async addPilgrimToGroup(groupId: string, agencyId: string, pilgrimId: string, userId?: string): Promise<any> {
     return this.db.transaction(async (trx) => {
       const group = await this.groupsDao.findById(groupId, trx);
       if (!group) throw new NotFoundException(`Group with ID ${groupId} not found`);
@@ -184,6 +191,7 @@ export class GroupsService {
         throw new BadRequestException('Pilgrim must belong to the same agency as the group to be added');
       }
 
+      const activation = await this.billing.activateForGroup(trx, agencyId, pilgrimId, groupId, userId);
       const groupMember = await this.groupMembersDao.addPilgrimToGroup(groupId, pilgrimId, trx);
 
       const fullName = [pilgrim.first_name, pilgrim.middle_name, pilgrim.last_name].filter(Boolean).join(' ');
@@ -195,6 +203,7 @@ export class GroupsService {
           pilgrim_id: groupMember.pilgrim_id,
           pilgrim_name: fullName || 'Unknown',
           joined_at: groupMember.joined_at,
+          coins_charged: activation.charged,
         },
       };
     });
@@ -213,13 +222,14 @@ export class GroupsService {
       if (!membership) throw new BadRequestException('Pilgrim is not assigned to any group');
       if (membership.group_id !== groupId) throw new BadRequestException('Pilgrim is not a member of this group');
 
+      const activation_status = await this.billing.releaseMember(trx, groupId, pilgrimId);
       const removed = await this.groupMembersDao.removePilgrimFromGroup(pilgrimId, trx);
       if (!removed) throw new BadRequestException('Failed to remove pilgrim from group');
 
       const fullName = [pilgrim.first_name, pilgrim.middle_name, pilgrim.last_name].filter(Boolean).join(' ');
       return {
         message: 'Pilgrim successfully removed from group',
-        data: { pilgrim_id: pilgrimId, pilgrim_name: fullName || 'Unknown' },
+        data: { pilgrim_id: pilgrimId, pilgrim_name: fullName || 'Unknown', activation_status },
       };
     });
   }
@@ -263,6 +273,7 @@ export class GroupsService {
 
   async updateMemberDocuments(groupId: string, agencyId: string, pilgrimId: string, dto: UpdateMemberDocumentsDto, userId?: string) {
     await this.verifyGroupOwnership(groupId, agencyId);
+    await this.billing.assertMembersActivated(groupId, [pilgrimId]);
     const changed = await this.groupMembersDao.updateDocuments(groupId, [pilgrimId], this.documentsPatch(dto, userId) as any);
     if (!changed) throw new BadRequestException('Pilgrim is not a member of this group');
     return this.groupsDao.findByIdWithJoins(groupId);
@@ -271,7 +282,9 @@ export class GroupsService {
   async bulkUpdateMemberDocuments(groupId: string, agencyId: string, dto: BulkUpdateMemberDocumentsDto, userId?: string) {
     await this.verifyGroupOwnership(groupId, agencyId);
     const { pilgrim_ids, ...rest } = dto;
-    const updated = await this.groupMembersDao.updateDocuments(groupId, Array.from(new Set(pilgrim_ids)), this.documentsPatch(rest, userId) as any);
+    const ids = Array.from(new Set(pilgrim_ids));
+    await this.billing.assertMembersActivated(groupId, ids);
+    const updated = await this.groupMembersDao.updateDocuments(groupId, ids, this.documentsPatch(rest, userId) as any);
     const group = await this.groupsDao.findByIdWithJoins(groupId);
     return { updated, group };
   }

@@ -289,6 +289,12 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
             JOIN ${TABLE_NAMES.GROUPS} g ON g.id = gm.group_id
             WHERE gm.pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id LIMIT 1) as "group"`,
         ),
+        // Coin activation for the pilgrim's current agency: IN_USE | FREE | REFUND_PENDING, or null.
+        this.db.raw(
+          `(SELECT pa.status FROM ${TABLE_NAMES.PILGRIM_ACTIVATIONS} pa
+            WHERE pa.pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id AND pa.agency_id = ${TABLE_NAMES.PILGRIMS}.agency_id
+              AND pa.status IN ('IN_USE', 'FREE', 'REFUND_PENDING') LIMIT 1) as activation_status`,
+        ),
       )
       .where((builder) => this.applyListFilters(builder, where))
       .whereNull(`${TABLE_NAMES.PILGRIMS}.deleted_at`)
@@ -334,6 +340,12 @@ export class PilgrimsDao extends BaseDao<Pilgrim> {
           `(SELECT json_build_object('id', g.id, 'name', g.name) FROM ${TABLE_NAMES.GROUP_MEMBERS} gm
             JOIN ${TABLE_NAMES.GROUPS} g ON g.id = gm.group_id
             WHERE gm.pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id LIMIT 1) as "group"`,
+        ),
+        // Coin activation for the pilgrim's current agency: IN_USE | FREE | REFUND_PENDING, or null.
+        this.db.raw(
+          `(SELECT pa.status FROM ${TABLE_NAMES.PILGRIM_ACTIVATIONS} pa
+            WHERE pa.pilgrim_id = ${TABLE_NAMES.PILGRIMS}.id AND pa.agency_id = ${TABLE_NAMES.PILGRIMS}.agency_id
+              AND pa.status IN ('IN_USE', 'FREE', 'REFUND_PENDING') LIMIT 1) as activation_status`,
         ),
       )
       .where((builder) => this.applyListFilters(builder, where))

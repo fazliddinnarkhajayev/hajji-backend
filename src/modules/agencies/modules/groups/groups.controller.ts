@@ -95,7 +95,7 @@ export class GroupsController {
     @Body() dto: AddPilgrimToGroupDto,
     @CurrentUser() user: any,
   ) {
-    return this.groupsService.addPilgrimToGroup(groupId, user.agency_id, dto.pilgrim_id);
+    return this.groupsService.addPilgrimToGroup(groupId, user.agency_id, dto.pilgrim_id, user.user_id ?? user.id);
   }
 
   @AgencyRoles(...MANAGE_ROLES)

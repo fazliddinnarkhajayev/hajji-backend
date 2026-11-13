@@ -12,6 +12,7 @@ import { SundryService } from 'src/shared/services/sundry.service';
 import { CreatePilgrimDto } from './dto/create-pilgrim.dto';
 import { UpdatePilgrimDto } from './dto/update-pilgrim.dto';
 import { TABLE_NAMES } from 'src/shared/constants';
+import { BillingService } from 'src/shared/services/billing.service';
 import { PilgrimAgencyHistoryDao } from 'src/shared/dao/pilgrim-agency-history.dao';
 import { buildTemplate, ImportError, ImportRefs, normalizeImportPhone, parseWorkbook, validateRows } from './pilgrims-import';
 
@@ -32,6 +33,7 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
     private readonly usersService: UsersService,
     private readonly sundryService: SundryService,
     private readonly historyDao: PilgrimAgencyHistoryDao,
+    private readonly billing: BillingService,
   ) {
     super(pilgrimsDao);
   }
@@ -208,6 +210,8 @@ export class AgencyPilgrimsService extends BaseService<Pilgrim, PilgrimsDao> {
 
       await t(TABLE_NAMES.ROOM_MEMBERS).where({ pilgrim_id: pilgrimId }).delete();
       await t(TABLE_NAMES.ROOM_REQUEST_MEMBERS).where({ pilgrim_id: pilgrimId }).delete();
+      const membership = await t(TABLE_NAMES.GROUP_MEMBERS).where({ pilgrim_id: pilgrimId }).first('group_id');
+      if (membership) await this.billing.releaseMember(t, membership.group_id, pilgrimId);
       await t(TABLE_NAMES.GROUP_MEMBERS).where({ pilgrim_id: pilgrimId }).delete();
       await this.pilgrimsDao.updateById(pilgrimId, {
         agency_id: null,

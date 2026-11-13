@@ -1,3 +1,4 @@
+import { BillingService } from 'src/shared/services/billing.service';
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { storedGroupStatus } from 'src/shared/dao/group-status';
 import { GroupsDao, Group } from './groups.dao';
@@ -22,6 +23,7 @@ export class GroupsService {
     private readonly agencyUsersDao: AgencyUsersDao,
     private readonly roomRequestsDao: RoomRequestsDao,
     private readonly groupMembersDao: GroupMembersDao,
+    private readonly billing: BillingService,
     private readonly roomsDao: RoomsDao,
     private readonly plansDao: GroupPlansDao,
     private readonly proceduresDao: PlanProceduresDao,
@@ -133,6 +135,7 @@ export class GroupsService {
     }
 
     await this.groupMembersDao.transaction(async (trx) => {
+      await this.billing.releaseGroup(trx, id);
       await this.groupMembersDao.releaseGroup(id, trx);
       await this.groupsDao.updateById(id, {
         is_deleted: true,
